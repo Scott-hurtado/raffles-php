@@ -1,3 +1,61 @@
+<?php
+require_once '../admin/process_admin_login.php';
+
+// Si ya está logueado, redirigir al panel
+if (isAdminLoggedIn()) {
+    header('Location: panel.php');
+    exit();
+}
+
+// Variables para mensajes
+$error_message = '';
+$success_message = '';
+$remembered_username = '';
+
+// Verificar si hay usuario recordado en cookies
+if (isset($_COOKIE['admin_remember']) && !empty($_COOKIE['admin_remember'])) {
+    $remembered_username = htmlspecialchars($_COOKIE['admin_remember']);
+}
+
+// Procesar formulario de login
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $username = cleanInput($_POST['username'] ?? '');
+    $password = $_POST['password'] ?? '';
+    $remember = isset($_POST['remember']);
+    
+    // Validaciones básicas
+    if (empty($username) || empty($password)) {
+        $error_message = 'Por favor, completa todos los campos';
+    } else {
+        // Verificar credenciales
+        $admin = verifyAdminCredentials($username, $password);
+        
+        if ($admin) {
+            // Login exitoso
+            loginAdmin($admin);
+            
+            // Manejar "recordar usuario"
+            if ($remember) {
+                setcookie('admin_remember', $username, time() + (30 * 24 * 60 * 60), '/', '', true, true); // 30 días
+            } else {
+                setcookie('admin_remember', '', time() - 3600, '/', '', true, true); // Eliminar cookie
+            }
+            
+            // Log de actividad
+            logAdminActivity('login', 'Inicio de sesión exitoso');
+            
+            // Redirigir al panel
+            header('Location: panel.php');
+            exit();
+        } else {
+            $error_message = 'Usuario o contraseña incorrectos';
+            
+            // Log de intento fallido
+            error_log("Intento de login fallido - Usuario: $username - IP: " . ($_SERVER['REMOTE_ADDR'] ?? 'unknown'));
+        }
+    }
+}
+?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -123,7 +181,7 @@
             </form>
             
             <div class="login-footer">
-                <a href="/" class="back-link">
+                <a href="../index.php" class="back-link">
                     <svg class="back-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M19 12H5"/>
                         <path d="M12 19l-7-7 7-7"/>
@@ -134,6 +192,6 @@
         </div>
     </div>
     
-    <script src="assets/js/admin-login.js"></script>
+    <script src="../assets/js/admin/admin-login.js"></script>
 </body>
 </html>

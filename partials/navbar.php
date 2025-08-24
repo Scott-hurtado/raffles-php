@@ -21,3 +21,5 @@
         </div>
     </div>
 </nav>
+
+<script src="../assets/js/partials/navbar.js"></script>
