@@ -4,13 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Resultados - Rifas Online</title>
-    <link rel="stylesheet" href="static/css/partials/navbar.css">
-    <link rel="stylesheet" href="static/css/rifas/results.css">
-    <link rel="stylesheet" href="static/css/partials/footer.css">
+    <link rel="stylesheet" href="../assets/css/partials/navbar.css">
+    <link rel="stylesheet" href="../assets/css/raffles/results.css">
+    <link rel="stylesheet" href="../assets/css/partials/footer.css">
 </head>
 <body>
     <!-- Include Navbar -->
-    <?php include 'navbar.php'; ?>
+    <?php include '../partials/navbar.php'; ?>
 
     <!-- Hero Section -->
     <div class="results-hero">
@@ -142,10 +142,10 @@
     </div>
 
     <!-- Include Footer -->
-    <?php include 'footer.php'; ?>
+    <?php include '../partials/footer.php'; ?>
 
     <!-- Load Scripts -->
-    <script src="static/js/partials/navbar.js"></script>
-    <script src="static/js/rifas/results.js"></script>
+    <script src="../assets/js/partials/navbar.js"></script>
+    <script src="../assets/js/raffles/results.js"></script>
 </body>
 </html>

@@ -1,21 +1,21 @@
-
-<?php
-
-// Enable all error reporting
-ini_set('display_errors', 1); ini_set('display_startup_errors', 1); error_reporting(E_ALL);
-
-?>
-
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Administración - Login - Rifas Online</title>
-    <link rel="stylesheet" href="static/css/admin/admin_login.css">
+    <link rel="stylesheet" href="../assets/css/admin/admin_login.css">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="description" content="Panel de administración - Rifas Online">
 </head>
 <body>
+    <div class="floating-shapes">
+        <div class="shape circle"></div>
+        <div class="shape square"></div>
+        <div class="shape triangle"></div>
+        <div class="shape circle"></div>
+    </div>
+
     <div class="admin-container">
         <div class="login-card">
             <div class="login-header">
@@ -27,7 +27,27 @@ ini_set('display_errors', 1); ini_set('display_startup_errors', 1); error_report
                 <p>Ingresa tus credenciales para acceder al sistema</p>
             </div>
             
-            <form class="login-form" id="adminLoginForm" method="POST" action="/admin/login">
+            <form class="login-form" id="adminLoginForm" method="POST">
+                <?php if ($error_message): ?>
+                <div class="error-message">
+                    <svg class="error-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <line x1="15" y1="9" x2="9" y2="15"/>
+                        <line x1="9" y1="9" x2="15" y2="15"/>
+                    </svg>
+                    <span class="error-text"><?php echo htmlspecialchars($error_message); ?></span>
+                </div>
+                <?php endif; ?>
+
+                <?php if ($success_message): ?>
+                <div class="success-message">
+                    <svg class="success-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="20,6 9,17 4,12"/>
+                    </svg>
+                    <span class="success-text"><?php echo htmlspecialchars($success_message); ?></span>
+                </div>
+                <?php endif; ?>
+                
                 <div class="form-group">
                     <label for="username">Usuario</label>
                     <div class="input-wrapper">
@@ -35,7 +55,12 @@ ini_set('display_errors', 1); ini_set('display_startup_errors', 1); error_report
                             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
                             <circle cx="12" cy="7" r="4"/>
                         </svg>
-                        <input type="text" id="username" name="username" placeholder="Ingresa tu usuario" required>
+                        <input type="text" 
+                               id="username" 
+                               name="username" 
+                               placeholder="Ingresa tu usuario" 
+                               value="<?php echo htmlspecialchars($_POST['username'] ?? $remembered_username ?? ''); ?>"
+                               required>
                     </div>
                 </div>
                 
@@ -59,7 +84,10 @@ ini_set('display_errors', 1); ini_set('display_startup_errors', 1); error_report
                 
                 <div class="form-options">
                     <label class="checkbox-container">
-                        <input type="checkbox" id="rememberMe" name="remember">
+                        <input type="checkbox" 
+                               id="rememberMe" 
+                               name="remember"
+                               <?php echo (isset($_POST['remember']) || isset($_COOKIE['admin_remember'])) ? 'checked' : ''; ?>>
                         <span class="checkmark">
                             <svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
                                 <polyline points="20,6 9,17 4,12"/>
@@ -73,9 +101,12 @@ ini_set('display_errors', 1); ini_set('display_startup_errors', 1); error_report
                     <span class="btn-text">Iniciar Sesión</span>
                     <div class="btn-loader">
                         <svg class="spinner" viewBox="0 0 24 24">
-                            <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="31.416" stroke-dashoffset="31.416">
-                                <animate attributeName="stroke-dasharray" dur="2s" values="0 31.416;15.708 15.708;0 31.416" repeatCount="indefinite"/>
-                                <animate attributeName="stroke-dashoffset" dur="2s" values="0;-15.708;-31.416" repeatCount="indefinite"/>
+                            <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2" 
+                                    stroke-dasharray="31.416" stroke-dashoffset="31.416">
+                                <animate attributeName="stroke-dasharray" dur="2s" 
+                                        values="0 31.416;15.708 15.708;0 31.416" repeatCount="indefinite"/>
+                                <animate attributeName="stroke-dashoffset" dur="2s" 
+                                        values="0;-15.708;-31.416" repeatCount="indefinite"/>
                             </circle>
                         </svg>
                     </div>
@@ -101,16 +132,8 @@ ini_set('display_errors', 1); ini_set('display_startup_errors', 1); error_report
                 </a>
             </div>
         </div>
-        
-        <!-- Background Decoration -->
-        <div class="background-decoration">
-            <div class="decoration-shape shape-1"></div>
-            <div class="decoration-shape shape-2"></div>
-            <div class="decoration-shape shape-3"></div>
-            <div class="decoration-shape shape-4"></div>
-        </div>
     </div>
     
-    <script src="static/js/admin/admin_login.js"></script>
+    <script src="assets/js/admin-login.js"></script>
 </body>
 </html>

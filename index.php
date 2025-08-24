@@ -478,7 +478,7 @@
     <?php include './partials/footer.php'; ?>
 
     <!-- Load Scripts -->
-
+ <script src="./assets/js/partials/navbar.js"></script>
     <script src="./assets/js/index.js"></script>
 </body>
 </html>

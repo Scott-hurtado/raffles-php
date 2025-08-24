@@ -4,13 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Registrarse - Rifas Online</title>
-    <link rel="stylesheet" href="static/css/partials/navbar.css">
-    <link rel="stylesheet" href="static/css/auth/auth.css">
-    <link rel="stylesheet" href="static/css/partials/footer.css">
+    <link rel="stylesheet" href="../assets/css/partials/navbar.css">
+    <link rel="stylesheet" href="../assets/css/auth/auth.css">
+    <link rel="stylesheet" href="../assets/css/partials/footer.css">
 </head>
 <body>
     <!-- Include Navbar -->
-    <?php include 'navbar.php'; ?>
+    <?php include '../partials/navbar.php'; ?>
 
     <!-- Register Container -->
     <div class="auth-container">
@@ -290,10 +290,10 @@
     </div>
 
     <!-- Include Footer -->
-    <?php include 'footer.php'; ?>
+    <?php include '../partials/footer.php'; ?>
 
     <!-- Load Scripts -->
-    <script src="static/js/partials/navbar.js"></script>
-    <script src="static/js/auth/auth.js"></script>
+    <script src="../assets/js/partials/navbar.js"></script>
+    <script src="../assets/js/auth/auth.js"></script>
 </body>
 </html>
