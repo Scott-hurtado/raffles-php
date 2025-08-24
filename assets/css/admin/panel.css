@@ -677,3 +677,248 @@
                 height: 35px;
             }
         }
+
+        /* Vista Seller - Estilos específicos */
+.seller-panel {
+    padding: 0;
+    min-height: 100vh;
+    background: #f8fafc;
+}
+
+.seller-header {
+    background: linear-gradient(135deg, #059669, #10b981);
+    color: white;
+    padding: 1.5rem 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.seller-header-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    width: 100%;
+}
+
+.seller-title {
+    font-size: 1.8rem;
+    font-weight: 700;
+    margin: 0;
+}
+
+.seller-user-info {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.seller-avatar {
+    width: 40px;
+    height: 40px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+}
+
+.seller-details {
+    display: flex;
+    flex-direction: column;
+}
+
+.seller-name {
+    font-weight: 600;
+    margin: 0;
+}
+
+.seller-type {
+    font-size: 0.8rem;
+    opacity: 0.9;
+}
+
+.seller-content {
+    padding: 2rem;
+    background: #f8fafc;
+    min-height: calc(100vh - 160px);
+}
+
+/* Iconos específicos para seller */
+.icon-tickets {
+    color: #059669;
+}
+
+.icon-commission {
+    color: #f59e0b;
+}
+
+.icon-month {
+    color: #3b82f6;
+}
+
+.icon-ranking {
+    color: #8b5cf6;
+}
+
+/* Tabla específica para seller */
+.table-subtitle {
+    color: #64748b;
+    font-size: 0.9rem;
+    margin: 0.5rem 0 0 0;
+}
+
+.commission-amount {
+    font-weight: 600;
+    color: #059669;
+    font-size: 1rem;
+}
+
+.commission-rate {
+    color: #64748b;
+    font-size: 0.8rem;
+}
+
+.seller-sales {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+.sales-count {
+    font-weight: 600;
+    color: #334155;
+    font-size: 0.9rem;
+}
+
+.sales-earnings {
+    color: #059669;
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+/* Botones específicos para seller */
+.btn-sell {
+    color: #059669;
+    border-color: rgba(5, 150, 105, 0.3);
+}
+
+.btn-sell:hover {
+    border-color: #059669;
+    background: #ecfdf5;
+}
+
+.btn-history {
+    color: #3b82f6;
+    border-color: rgba(59, 130, 246, 0.3);
+}
+
+.btn-history:hover {
+    border-color: #3b82f6;
+    background: #eff6ff;
+}
+
+.btn-details {
+    color: #8b5cf6;
+    border-color: rgba(139, 92, 246, 0.3);
+}
+
+.btn-details:hover {
+    border-color: #8b5cf6;
+    background: #f3e8ff;
+}
+
+/* Panel de acciones rápidas */
+.quick-actions {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+    margin-top: 2rem;
+}
+
+.action-card {
+    background: white;
+    padding: 2rem;
+    border-radius: 15px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+    border: 1px solid #e2e8f0;
+    text-align: center;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.action-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+}
+
+.action-icon {
+    width: 60px;
+    height: 60px;
+    margin: 0 auto 1.5rem;
+    background: linear-gradient(135deg, #059669, #10b981);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+}
+
+.action-icon svg {
+    width: 28px;
+    height: 28px;
+}
+
+.action-card h3 {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: #333;
+    margin-bottom: 1rem;
+}
+
+.action-card p {
+    color: #666;
+    line-height: 1.6;
+    margin-bottom: 1.5rem;
+}
+
+.action-button {
+    background: linear-gradient(135deg, #059669, #10b981);
+    color: white;
+    border: none;
+    padding: 0.8rem 2rem;
+    border-radius: 30px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.action-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(5, 150, 105, 0.4);
+}
+
+/* Responsive para seller */
+@media (max-width: 768px) {
+    .seller-header {
+        padding: 1rem;
+        flex-direction: column;
+        gap: 1rem;
+        text-align: center;
+    }
+    
+    .seller-content {
+        padding: 1rem;
+    }
+    
+    .quick-actions {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+    
+    .action-card {
+        padding: 1.5rem;
+    }
+}
