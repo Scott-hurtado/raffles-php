@@ -26,7 +26,7 @@ $options = [
 
 try {
     $pdo = new PDO($dsn, $username, $password, $options);
-    echo "Conexión exitosa a la base de datos"; // Para debug - remover en producción
+    // Conexión exitosa - mensaje removido para producción
 } catch (PDOException $e) {
     // En producción, no mostrar detalles del error
     if ($_ENV['ENVIRONMENT'] === 'production' || $_SERVER['ENVIRONMENT'] === 'production') {

@@ -14,209 +14,60 @@ if (isset($_GET['logout'])) {
     header('Location: admin_login.php');
     exit();
 }
+
+// Datos de ejemplo para rifas (en producción vendría de la base de datos)
+$rifas_data = [
+    [
+        'id' => 1,
+        'name' => 'iPhone 15 Pro Max',
+        'draw_date' => '2025-02-15',
+        'ticket_price' => 50.00,
+        'total_tickets' => 1000,
+        'sold_tickets' => 680,
+        'status' => 'active'
+    ],
+    [
+        'id' => 2,
+        'name' => 'PlayStation 5 + Juegos',
+        'draw_date' => '2025-02-20',
+        'ticket_price' => 30.00,
+        'total_tickets' => 1500,
+        'sold_tickets' => 1200,
+        'status' => 'active'
+    ],
+    [
+        'id' => 3,
+        'name' => 'MacBook Air M2',
+        'draw_date' => '2025-02-25',
+        'ticket_price' => 75.00,
+        'total_tickets' => 800,
+        'sold_tickets' => 450,
+        'status' => 'active'
+    ],
+    [
+        'id' => 4,
+        'name' => 'Tesla Model 3',
+        'draw_date' => '2025-03-01',
+        'ticket_price' => 500.00,
+        'total_tickets' => 200,
+        'sold_tickets' => 85,
+        'status' => 'active'
+    ]
+];
 ?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Panel de Administración - Rifas Online</title>
+    <title>Panel de <?php echo ucfirst($current_admin['user_type']); ?> - Rifas Online</title>
     <link rel="stylesheet" href="../assets/css/admin/admin_login.css">
     <meta name="robots" content="noindex, nofollow">
-    <style>
-        .admin-panel {
-            min-height: 100vh;
-            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-            padding: 2rem;
-        }
-        
-        .panel-container {
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-        
-        .panel-header {
-            background: white;
-            padding: 2rem;
-            border-radius: 20px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-            margin-bottom: 2rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
-        .welcome-info h1 {
-            color: #333;
-            font-size: 2rem;
-            margin-bottom: 0.5rem;
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-        
-        .welcome-info p {
-            color: #666;
-            font-size: 1.1rem;
-        }
-        
-        .admin-info {
-            text-align: right;
-        }
-        
-        .admin-badge {
-            display: inline-block;
-            padding: 0.5rem 1rem;
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            color: white;
-            border-radius: 20px;
-            font-weight: 600;
-            margin-bottom: 0.5rem;
-            text-transform: uppercase;
-            font-size: 0.8rem;
-            letter-spacing: 1px;
-        }
-        
-        .admin-details {
-            color: #666;
-            font-size: 0.9rem;
-        }
-        
-        .panel-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 2rem;
-            margin-bottom: 2rem;
-        }
-        
-        .panel-card {
-            background: white;
-            padding: 2rem;
-            border-radius: 20px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-            text-align: center;
-            transition: transform 0.3s ease;
-        }
-        
-        .panel-card:hover {
-            transform: translateY(-5px);
-        }
-        
-        .card-icon {
-            width: 60px;
-            height: 60px;
-            margin: 0 auto 1.5rem;
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-        }
-        
-        .card-title {
-            font-size: 1.3rem;
-            font-weight: 700;
-            color: #333;
-            margin-bottom: 1rem;
-        }
-        
-        .card-description {
-            color: #666;
-            line-height: 1.6;
-            margin-bottom: 1.5rem;
-        }
-        
-        .card-button {
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            color: white;
-            border: none;
-            padding: 0.8rem 2rem;
-            border-radius: 30px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            text-decoration: none;
-            display: inline-block;
-        }
-        
-        .card-button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
-            color: white;
-            text-decoration: none;
-        }
-        
-        .logout-btn {
-            background: linear-gradient(135deg, #ef4444, #dc2626);
-            color: white;
-            border: none;
-            padding: 1rem 2rem;
-            border-radius: 30px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            text-decoration: none;
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-        
-        .logout-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(239, 68, 68, 0.4);
-            color: white;
-            text-decoration: none;
-        }
-        
-        .stats-row {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1.5rem;
-            margin-bottom: 2rem;
-        }
-        
-        .stat-card {
-            background: white;
-            padding: 1.5rem;
-            border-radius: 15px;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
-            text-align: center;
-        }
-        
-        .stat-number {
-            font-size: 2rem;
-            font-weight: 700;
-            color: #667eea;
-            margin-bottom: 0.5rem;
-        }
-        
-        .stat-label {
-            color: #666;
-            font-size: 0.9rem;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-        
-        @media (max-width: 768px) {
-            .admin-panel {
-                padding: 1rem;
-            }
-            
-            .panel-header {
-                flex-direction: column;
-                gap: 1rem;
-                text-align: center;
-            }
-            
-            .admin-info {
-                text-align: center;
-            }
-        }
-    </style>
+    <link rel="stylesheet" href="../assets/css/admin/panel.css">
 </head>
 <body>
+    <?php if ($current_admin['user_type'] === 'admin'): ?>
+    <!-- Vista Admin -->
     <div class="admin-panel">
         <div class="panel-container">
             <!-- Header -->
@@ -343,5 +194,275 @@ if (isset($_GET['logout'])) {
             </div>
         </div>
     </div>
+
+    <?php else: ?>
+    <!-- Vista Committee -->
+    <div class="committee-panel">
+        <div class="panel-container">
+            <!-- Header Committee -->
+            <div class="committee-header">
+                <div style="flex: 1;">
+                    <div class="committee-header-top">
+                        <div>
+                            <div class="breadcrumb">
+                                <span>Panel</span>
+                            </div>
+                            <h1 class="committee-title">Panel de Comité</h1>
+                        </div>
+                        <div class="committee-user-info">
+                            <div class="committee-avatar">
+                                <?php echo strtoupper(substr($current_admin['username'], 0, 1)); ?>
+                            </div>
+                            <div class="committee-details">
+                                <div class="committee-name"><?php echo htmlspecialchars($current_admin['username']); ?></div>
+                                <div class="committee-type"><?php echo ucfirst($current_admin['user_type']); ?></div>
+                            </div>
+                            <a href="?logout=1" class="logout-btn" onclick="return confirm('¿Estás seguro de que deseas cerrar sesión?')">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                                    <polyline points="16,17 21,12 16,7"/>
+                                    <line x1="21" y1="12" x2="9" y2="12"/>
+                                </svg>
+                                Cerrar Sesión
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Content Committee -->
+            <div class="committee-content">
+                <!-- Estadísticas -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-icon icon-rifas">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
+                                    <line x1="3" y1="6" x2="21" y2="6"/>
+                                    <path d="M16 10a4 4 0 0 1-8 0"/>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="stat-number">4</div>
+                        <div class="stat-label">Rifas Activas</div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-icon icon-active">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                                    <polyline points="22,4 12,14.01 9,11.01"/>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="stat-number">2,415</div>
+                        <div class="stat-label">Boletos Vendidos</div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-icon icon-sales">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <line x1="12" y1="1" x2="12" y2="23"/>
+                                    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="stat-number">$45,670</div>
+                        <div class="stat-label">Ventas del Mes</div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-icon icon-satisfaction">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="stat-number">98.7%</div>
+                        <div class="stat-label">Satisfacción</div>
+                    </div>
+                </div>
+                
+                <div class="rifas-table-container">
+                    <div class="table-header">
+                        <h2 class="table-title">Rifas en Proceso</h2>
+                    </div>
+                    
+                    <table class="rifas-table">
+                        <thead>
+                            <tr>
+                                <th>Rifa</th>
+                                <th>Fecha de Sorteo</th>
+                                <th>Precio del Boleto</th>
+                                <th>Progreso de Venta</th>
+                                <th>Estado</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($rifas_data as $rifa): ?>
+                            <?php 
+                                $progress_percentage = ($rifa['sold_tickets'] / $rifa['total_tickets']) * 100;
+                                $formatted_date = date('d/m/Y', strtotime($rifa['draw_date']));
+                            ?>
+                            <tr>
+                                <td>
+                                    <div class="rifa-name"><?php echo htmlspecialchars($rifa['name']); ?></div>
+                                    <div class="rifa-date">ID: #<?php echo $rifa['id']; ?></div>
+                                </td>
+                                <td>
+                                    <div class="rifa-date"><?php echo $formatted_date; ?></div>
+                                </td>
+                                <td>
+                                    <div class="rifa-price">$<?php echo number_format($rifa['ticket_price'], 2); ?></div>
+                                </td>
+                                <td>
+                                    <div class="rifa-progress">
+                                        <div class="progress-text">
+                                            <?php echo number_format($rifa['sold_tickets']); ?> / <?php echo number_format($rifa['total_tickets']); ?> 
+                                            (<?php echo number_format($progress_percentage, 1); ?>%)
+                                        </div>
+                                        <div class="progress-bar">
+                                            <div class="progress-fill" style="width: <?php echo $progress_percentage; ?>%"></div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="rifa-status status-<?php echo $rifa['status']; ?>">
+                                        <?php echo ucfirst($rifa['status']); ?>
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="rifa-actions">
+                                        <button class="action-btn btn-sellers" 
+                                                data-tooltip="Vendedores"
+                                                onclick="window.location.href='sellers.php?rifa_id=<?php echo $rifa['id']; ?>'">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                                                <circle cx="8.5" cy="7" r="4"/>
+                                                <path d="M20 8v6"/>
+                                                <path d="M23 11h-6"/>
+                                            </svg>
+                                        </button>
+                                        
+                                        <button class="action-btn btn-accounting" 
+                                                data-tooltip="Contabilidad"
+                                                onclick="window.location.href='accounting.php?rifa_id=<?php echo $rifa['id']; ?>'">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                <line x1="12" y1="1" x2="12" y2="23"/>
+                                                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                                            </svg>
+                                        </button>
+                                        
+                                        <button class="action-btn btn-settings" 
+                                                data-tooltip="Configuración"
+                                                onclick="window.location.href='settings_committee.php?rifa_id=<?php echo $rifa['id']; ?>'">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                <circle cx="12" cy="12" r="3"/>
+                                                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                                            </svg>
+                                        </button>
+                                        
+                                        <div class="status-menu-container">
+                                            <button class="action-btn btn-status-menu" 
+                                                    data-tooltip="Cambiar Estado"
+                                                    onclick="toggleStatusMenu(<?php echo $rifa['id']; ?>)">
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <circle cx="5" cy="12" r="1"/>
+                                                    <circle cx="12" cy="12" r="1"/>
+                                                    <circle cx="19" cy="12" r="1"/>
+                                                </svg>
+                                            </button>
+                                            
+                                            <div class="status-dropdown" id="statusMenu-<?php echo $rifa['id']; ?>">
+                                                <div class="status-option active" 
+                                                     onclick="changeRifaStatus(<?php echo $rifa['id']; ?>, 'active')">
+                                                    <div class="status-dot status-dot-active"></div>
+                                                    Activa
+                                                </div>
+                                                <div class="status-option paused" 
+                                                     onclick="changeRifaStatus(<?php echo $rifa['id']; ?>, 'paused')">
+                                                    <div class="status-dot status-dot-paused"></div>
+                                                    Pausada
+                                                </div>
+                                                <div class="status-option finished" 
+                                                     onclick="changeRifaStatus(<?php echo $rifa['id']; ?>, 'finished')">
+                                                    <div class="status-dot status-dot-finished"></div>
+                                                    Finalizada
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+                                            
+                                            <button class="action-btn btn-accounting" 
+                                                    data-tooltip="Contabilidad"
+                                                    onclick="window.location.href='accounting.php?rifa_id=<?php echo $rifa['id']; ?>'">
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <line x1="12" y1="1" x2="12" y2="23"/>
+                                                    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                                                </svg>
+                                            </button>
+                                            
+                                            <button class="action-btn btn-settings" 
+                                                    data-tooltip="Configuración"
+                                                    onclick="window.location.href='settings_committee.php?rifa_id=<?php echo $rifa['id']; ?>'">
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <circle cx="12" cy="12" r="3"/>
+                                                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                                                </svg>
+                                            </button>
+                                            
+                                            <div class="status-menu-container">
+                                                <button class="action-btn btn-status-menu" 
+                                                        data-tooltip="Cambiar Estado"
+                                                        onclick="toggleStatusMenu(<?php echo $rifa['id']; ?>)">
+                                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                        <circle cx="12" cy="12" r="1"/>
+                                                        <circle cx="19" cy="12" r="1"/>
+                                                        <circle cx="5" cy="12" r="1"/>
+                                                    </svg>
+                                                </button>
+                                                
+                                                <div class="status-dropdown" id="statusMenu-<?php echo $rifa['id']; ?>">
+                                                    <div class="status-option active" 
+                                                         onclick="changeRifaStatus(<?php echo $rifa['id']; ?>, 'active')">
+                                                        <div class="status-dot status-dot-active"></div>
+                                                        Activa
+                                                    </div>
+                                                    <div class="status-option paused" 
+                                                         onclick="changeRifaStatus(<?php echo $rifa['id']; ?>, 'paused')">
+                                                        <div class="status-dot status-dot-paused"></div>
+                                                        Pausada
+                                                    </div>
+                                                    <div class="status-option finished" 
+                                                         onclick="changeRifaStatus(<?php echo $rifa['id']; ?>, 'finished')">
+                                                        <div class="status-dot status-dot-finished"></div>
+                                                        Finalizada
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                                
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
 </body>
 </html>
