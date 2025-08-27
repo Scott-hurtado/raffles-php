@@ -1,3 +1,39 @@
+<?php
+// Include database functions
+require_once './admin/process_admin_login.php';
+
+// Get next raffle for countdown
+$next_raffle = null;
+try {
+    $sql = "SELECT draw_date FROM raffles 
+            WHERE status = 'active' 
+            AND draw_date > NOW() 
+            ORDER BY draw_date ASC 
+            LIMIT 1";
+    $result = fetchOne($sql);
+    $next_raffle = $result ? $result['draw_date'] : null;
+} catch (Exception $e) {
+    error_log("Error getting next raffle: " . $e->getMessage());
+}
+
+// Get some statistics for the hero section
+$total_active_raffles = 0;
+$total_prizes_value = 0;
+
+try {
+    $stats_sql = "SELECT 
+                    COUNT(*) as active_count,
+                    SUM(ticket_price * total_tickets) as total_value
+                  FROM raffles 
+                  WHERE status = 'active' 
+                  AND draw_date > NOW()";
+    $stats = fetchOne($stats_sql);
+    $total_active_raffles = $stats['active_count'] ?? 0;
+    $total_prizes_value = $stats['total_value'] ?? 0;
+} catch (Exception $e) {
+    error_log("Error getting stats: " . $e->getMessage());
+}
+?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -7,6 +43,15 @@
     <link rel="stylesheet" href="./assets/css/partials/navbar.css">
     <link rel="stylesheet" href="./assets/css/index.css">
     <link rel="stylesheet" href="./assets/css/partials/footer.css">
+    <script>
+        // Pass PHP data to JavaScript
+        window.APP_DATA = {
+            nextRaffleDate: <?php echo $next_raffle ? "'" . $next_raffle . "'" : 'null'; ?>,
+            totalActiveRaffles: <?php echo $total_active_raffles; ?>,
+            totalPrizesValue: <?php echo $total_prizes_value; ?>,
+            apiUrl: './api/get_raffles.php'
+        };
+    </script>
 </head>
 <body>
     <!-- Include Navbar -->
@@ -28,8 +73,8 @@
             <div class="hero-content">
                 <h1 class="hero-title">Gana Increíbles Premios</h1>
                 <p class="hero-subtitle">
-                    Participa en nuestras rifas y ten la oportunidad de ganar productos increíbles.
-                    Sorteos transparentes, seguros y con premios garantizados.
+                    Participa en nuestras <?php echo $total_active_raffles; ?> rifas activas y ten la oportunidad de ganar productos increíbles.
+                    Sorteos transparentes, seguros y con premios garantizados por valor de $<?php echo number_format($total_prizes_value, 2); ?>.
                 </p>
                 <button class="hero-button" onclick="handleHeroClick()">
                     Participar Ahora
@@ -164,6 +209,12 @@
                 <div class="countdown-label">SEGUNDOS</div>
             </div>
         </div>
+        
+        <?php if (!$next_raffle): ?>
+        <div style="text-align: center; margin-top: 2rem; color: rgba(255, 255, 255, 0.8);">
+            <p>No hay sorteos programados en este momento</p>
+        </div>
+        <?php endif; ?>
     </div>
 
     <!-- Cómo se Selecciona Section -->
@@ -219,10 +270,23 @@
     <!-- Rifas Section -->
     <div class="rifas-container">
         <h2 class="rifas-title">RIFAS DISPONIBLES</h2>
-        <div class="rifas-slider-wrapper">
+        <div id="raffles-loading" style="text-align: center; padding: 3rem; color: #667eea;">
+            <div style="display: inline-block; width: 50px; height: 50px; border: 4px solid #e2e8f0; border-top-color: #667eea; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 1rem;"></div>
+            <p>Cargando rifas disponibles...</p>
+        </div>
+        <div class="rifas-slider-wrapper" style="display: none;">
             <div class="rifas-slider" id="rifasSlider">
                 <!-- Las rifas se generarán dinámicamente con JavaScript -->
             </div>
+        </div>
+        <div id="no-raffles-message" style="display: none; text-align: center; padding: 3rem; color: #666;">
+            <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" style="margin-bottom: 1rem; opacity: 0.5;">
+                <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                <line x1="8" y1="21" x2="16" y2="21"/>
+                <line x1="12" y1="17" x2="12" y2="21"/>
+            </svg>
+            <h3 style="margin-bottom: 0.5rem;">No hay rifas activas</h3>
+            <p>Las rifas aparecerán aquí cuando estén disponibles</p>
         </div>
     </div>
 
@@ -297,6 +361,36 @@
         <h2 class="selection-title">SELECCIONA TUS BOLETOS</h2>
         <p class="selection-subtitle">Elige los números de tu preferencia</p>
         
+        <!-- Selector de Rifa -->
+        <div class="raffle-selector-container">
+            <div class="raffle-selector-card">
+                <h3 class="selector-title">Selecciona una Rifa</h3>
+                <div class="raffle-dropdown-container">
+                    <select id="raffleSelector" class="raffle-dropdown" onchange="onRaffleChange()">
+                        <option value="">Cargando rifas disponibles...</option>
+                    </select>
+                    <div class="selected-raffle-info" id="selectedRaffleInfo" style="display: none;">
+                        <div class="raffle-info-item">
+                            <span class="info-label">Precio por boleto:</span>
+                            <span class="info-value" id="selectedRafflePrice">$0.00</span>
+                        </div>
+                        <div class="raffle-info-item">
+                            <span class="info-label">Total de boletos:</span>
+                            <span class="info-value" id="selectedRaffleTotal">0</span>
+                        </div>
+                        <div class="raffle-info-item">
+                            <span class="info-label">Boletos vendidos:</span>
+                            <span class="info-value" id="selectedRaffleSold">0</span>
+                        </div>
+                        <div class="raffle-info-item">
+                            <span class="info-label">Disponibles:</span>
+                            <span class="info-value" id="selectedRaffleAvailable">0</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
         <div class="selection-layout">
             <!-- Grid de Boletos -->
             <div class="tickets-grid-container">
@@ -314,7 +408,18 @@
                         <span>Seleccionado</span>
                     </div>
                 </div>
-                <div class="tickets-grid" id="ticketsGrid">
+                <div class="ticket-selection-message" id="ticketSelectionMessage">
+                    <div style="text-align: center; padding: 3rem; color: #666;">
+                        <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" style="margin-bottom: 1rem; opacity: 0.5;">
+                            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                            <line x1="8" y1="21" x2="16" y2="21"/>
+                            <line x1="12" y1="17" x2="12" y2="21"/>
+                        </svg>
+                        <h3 style="margin-bottom: 0.5rem;">Selecciona una rifa</h3>
+                        <p>Elige una rifa del menú superior para ver los boletos disponibles</p>
+                    </div>
+                </div>
+                <div class="tickets-grid" id="ticketsGrid" style="display: none;">
                     <!-- Los boletos se generarán dinámicamente -->
                 </div>
             </div>
@@ -353,7 +458,7 @@
                         </div>
                         <div class="summary-row">
                             <span>Precio por boleto:</span>
-                            <span>$5.00</span>
+                            <span id="ticketPrice">$5.00</span>
                         </div>
                         <div class="summary-row total-row">
                             <span>Total a pagar:</span>
@@ -478,7 +583,160 @@
     <?php include './partials/footer.php'; ?>
 
     <!-- Load Scripts -->
- <script src="./assets/js/partials/navbar.js"></script>
+    <style>
+        .raffle-selector-container {
+            max-width: 1400px;
+            margin: 0 auto 3rem;
+            padding: 0 2rem;
+        }
+        
+        .raffle-selector-card {
+            background: #ffffff;
+            border-radius: 20px;
+            padding: 2rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(102, 126, 234, 0.1);
+        }
+        
+        .selector-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 1.5rem;
+            text-align: center;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .raffle-dropdown-container {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 2rem;
+            align-items: start;
+        }
+        
+        .raffle-dropdown {
+            width: 100%;
+            padding: 1rem 1.5rem;
+            border: 2px solid rgba(102, 126, 234, 0.3);
+            border-radius: 15px;
+            font-size: 1rem;
+            background: #f8fafc;
+            color: #333;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-family: inherit;
+        }
+        
+        .raffle-dropdown:focus {
+            outline: none;
+            border-color: #667eea;
+            background: #ffffff;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        .raffle-dropdown:hover {
+            border-color: #667eea;
+            background: #ffffff;
+        }
+        
+        .selected-raffle-info {
+            background: #f8fafc;
+            border-radius: 15px;
+            padding: 1.5rem;
+            border: 1px solid rgba(102, 126, 234, 0.1);
+        }
+        
+        .raffle-info-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+        }
+        
+        .raffle-info-item:last-child {
+            border-bottom: none;
+        }
+        
+        .info-label {
+            color: #666;
+            font-weight: 500;
+        }
+        
+        .info-value {
+            color: #333;
+            font-weight: 600;
+        }
+        
+        @media (max-width: 768px) {
+            .raffle-dropdown-container {
+                grid-template-columns: 1fr;
+                gap: 1rem;
+            }
+            
+            .raffle-selector-container {
+                padding: 0 1rem;
+            }
+            
+            .raffle-selector-card {
+                padding: 1.5rem;
+            }
+        }
+        
+        .raffle-status {
+            display: inline-block;
+            padding: 0.2rem 0.6rem;
+            border-radius: 15px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .raffle-status.available {
+            background: linear-gradient(135deg, #dcfdf7, #a7f3d0);
+            color: #059669;
+        }
+        
+        .raffle-status.limited {
+            background: linear-gradient(135deg, #fef3c7, #fbbf24);
+            color: #d97706;
+        }
+        
+        .raffle-status.sold-out {
+            background: linear-gradient(135deg, #fecaca, #ef4444);
+            color: #dc2626;
+        }
+        
+        .raffle-progress {
+            margin-top: 0.5rem;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(135deg, #10b981, #059669);
+            border-radius: 3px;
+            transition: width 0.3s ease;
+        }
+        
+        .progress-text {
+            font-size: 0.8rem;
+            color: #666;
+            margin-bottom: 0.3rem;
+        }
+    </style>
+    <script src="./assets/js/partials/navbar.js"></script>
     <script src="./assets/js/index.js"></script>
 </body>
 </html>

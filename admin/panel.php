@@ -15,45 +15,66 @@ if (isset($_GET['logout'])) {
     exit();
 }
 
-// Datos de ejemplo para rifas (en producción vendría de la base de datos)
-$rifas_data = [
-    [
-        'id' => 1,
-        'name' => 'iPhone 15 Pro Max',
-        'draw_date' => '2025-02-15',
-        'ticket_price' => 50.00,
-        'total_tickets' => 1000,
-        'sold_tickets' => 680,
-        'status' => 'active'
-    ],
-    [
-        'id' => 2,
-        'name' => 'PlayStation 5 + Juegos',
-        'draw_date' => '2025-02-20',
-        'ticket_price' => 30.00,
-        'total_tickets' => 1500,
-        'sold_tickets' => 1200,
-        'status' => 'active'
-    ],
-    [
-        'id' => 3,
-        'name' => 'MacBook Air M2',
-        'draw_date' => '2025-02-25',
-        'ticket_price' => 75.00,
-        'total_tickets' => 800,
-        'sold_tickets' => 450,
-        'status' => 'active'
-    ],
-    [
-        'id' => 4,
-        'name' => 'Tesla Model 3',
-        'draw_date' => '2025-03-01',
-        'ticket_price' => 500.00,
-        'total_tickets' => 200,
-        'sold_tickets' => 85,
-        'status' => 'active'
-    ]
+// Obtener rifas reales de la base de datos
+$rifas_data = [];
+try {
+    $sql = "SELECT 
+                r.*,
+                COALESCE(r.sold_tickets, 0) as sold_tickets,
+                a.username as created_by_name
+            FROM raffles r 
+            LEFT JOIN admins a ON r.created_by = a.id 
+            ORDER BY r.created_at DESC";
+    
+    $rifas_data = fetchAll($sql);
+    
+    // Procesar datos para la vista
+    foreach ($rifas_data as &$rifa) {
+        // Decodificar imágenes JSON
+        if ($rifa['images']) {
+            $rifa['images_array'] = json_decode($rifa['images'], true) ?: [];
+        } else {
+            $rifa['images_array'] = [];
+        }
+        
+        // Formatear fecha para mostrar
+        $rifa['formatted_date'] = date('d/m/Y H:i', strtotime($rifa['draw_date']));
+        $rifa['days_remaining'] = ceil((strtotime($rifa['draw_date']) - time()) / 86400);
+    }
+} catch (Exception $e) {
+    error_log("Error al obtener rifas: " . $e->getMessage());
+    $rifas_data = [];
+}
+
+// Estadísticas generales
+$stats = [
+    'active_raffles' => 0,
+    'total_users' => 0,
+    'monthly_sales' => 0,
+    'total_tickets_sold' => 0
 ];
+
+try {
+    // Rifas activas
+    $stats['active_raffles'] = fetchOne("SELECT COUNT(*) as count FROM raffles WHERE status = 'active'")['count'] ?? 0;
+    
+    // Total de usuarios registrados (si tienes tabla de usuarios)
+    $stats['total_users'] = fetchOne("SELECT COUNT(*) as count FROM admins")['count'] ?? 0;
+    
+    // Ventas del mes
+    $stats['monthly_sales'] = fetchOne("
+        SELECT COALESCE(SUM(r.ticket_price * r.sold_tickets), 0) as total 
+        FROM raffles r 
+        WHERE MONTH(r.created_at) = MONTH(CURRENT_DATE()) 
+        AND YEAR(r.created_at) = YEAR(CURRENT_DATE())
+    ")['total'] ?? 0;
+    
+    // Total de boletos vendidos
+    $stats['total_tickets_sold'] = fetchOne("SELECT COALESCE(SUM(sold_tickets), 0) as total FROM raffles")['total'] ?? 0;
+    
+} catch (Exception $e) {
+    error_log("Error al obtener estadísticas: " . $e->getMessage());
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -64,6 +85,7 @@ $rifas_data = [
     <link rel="stylesheet" href="../assets/css/admin/admin_login.css">
     <meta name="robots" content="noindex, nofollow">
     <link rel="stylesheet" href="../assets/css/admin/panel.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
     <?php if ($current_admin['user_type'] === 'admin'): ?>
@@ -84,11 +106,7 @@ $rifas_data = [
                     </div>
                     <div style="margin-top: 1rem;">
                         <a href="?logout=1" class="logout-btn" onclick="return confirm('¿Estás seguro de que deseas cerrar sesión?')">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-                                <polyline points="16,17 21,12 16,7"/>
-                                <line x1="21" y1="12" x2="9" y2="12"/>
-                            </svg>
+                            <i class="fas fa-sign-out-alt"></i>
                             Cerrar Sesión
                         </a>
                     </div>
@@ -98,104 +116,200 @@ $rifas_data = [
             <!-- Estadísticas rápidas -->
             <div class="stats-row">
                 <div class="stat-card">
-                    <div class="stat-number">247</div>
-                    <div class="stat-label">Sorteos Activos</div>
+                    <div class="stat-number"><?php echo $stats['active_raffles']; ?></div>
+                    <div class="stat-label">Rifas Activas</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-number">15,432</div>
+                    <div class="stat-number"><?php echo number_format($stats['total_users']); ?></div>
                     <div class="stat-label">Usuarios Registrados</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-number">$45,670</div>
+                    <div class="stat-number">$<?php echo number_format($stats['monthly_sales'], 2); ?></div>
                     <div class="stat-label">Ventas del Mes</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number">98.7%</div>
-                    <div class="stat-label">Satisfacción</div>
                 </div>
             </div>
             
-            <!-- Panel de opciones -->
-            <div class="panel-grid">
-                <div class="panel-card">
-                    <div class="card-icon">
-                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
-                            <line x1="3" y1="6" x2="21" y2="6"/>
-                            <path d="M16 10a4 4 0 0 1-8 0"/>
-                        </svg>
+            <!-- Contenido principal - Tabla de rifas -->
+            <div class="admin-content">
+                <div class="rifas-table-container">
+                    <div class="table-header">
+                        <h2 class="table-title">Gestión de Rifas</h2>
+                        <button class="create-rifa-btn" onclick="createNewRifa()">
+                            <i class="fas fa-plus"></i>
+                            Crear Nueva Rifa
+                        </button>
                     </div>
-                    <h3 class="card-title">Gestionar Rifas</h3>
-                    <p class="card-description">Crear, editar y administrar todas las rifas activas del sistema</p>
-                    <a href="#" class="card-button">Administrar Rifas</a>
-                </div>
-                
-                <div class="panel-card">
-                    <div class="card-icon">
-                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-                            <circle cx="8.5" cy="7" r="4"/>
-                            <path d="M20 8v6"/>
-                            <path d="M23 11h-6"/>
-                        </svg>
+                    
+                    <?php if (empty($rifas_data)): ?>
+                    <div style="padding: 3rem; text-align: center; color: #6b7280;">
+                        <i class="fas fa-gift" style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.5;"></i>
+                        <h3 style="margin-bottom: 0.5rem;">No hay rifas creadas</h3>
+                        <p>Comienza creando tu primera rifa haciendo clic en "Crear Nueva Rifa"</p>
                     </div>
-                    <h3 class="card-title">Usuarios</h3>
-                    <p class="card-description">Administrar usuarios registrados y sus participaciones</p>
-                    <a href="#" class="card-button">Ver Usuarios</a>
-                </div>
-                
-                <div class="panel-card">
-                    <div class="card-icon">
-                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <line x1="12" y1="1" x2="12" y2="23"/>
-                            <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-                        </svg>
-                    </div>
-                    <h3 class="card-title">Pagos</h3>
-                    <p class="card-description">Revisar transacciones y gestionar pagos pendientes</p>
-                    <a href="#" class="card-button">Ver Pagos</a>
-                </div>
-                
-                <div class="panel-card">
-                    <div class="card-icon">
-                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M14 9V5a3 3 0 0 0-6 0v4"/>
-                            <rect x="2" y="9" width="20" height="11" rx="2" ry="2"/>
-                        </svg>
-                    </div>
-                    <h3 class="card-title">Sorteos</h3>
-                    <p class="card-description">Ejecutar sorteos y administrar ganadores</p>
-                    <a href="#" class="card-button">Gestionar Sorteos</a>
-                </div>
-                
-                <div class="panel-card">
-                    <div class="card-icon">
-                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M9 19c-5 0-8-4-8-9s4-9 9-9 9 4 9 9"/>
-                            <path d="M21 21l-4.35-4.35"/>
-                        </svg>
-                    </div>
-                    <h3 class="card-title">Reportes</h3>
-                    <p class="card-description">Generar reportes y estadísticas del sistema</p>
-                    <a href="#" class="card-button">Ver Reportes</a>
-                </div>
-                
-                <div class="panel-card">
-                    <div class="card-icon">
-                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="12" cy="12" r="3"/>
-                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-                        </svg>
-                    </div>
-                    <h3 class="card-title">Configuración</h3>
-                    <p class="card-description">Ajustar configuraciones del sistema y parámetros</p>
-                    <a href="#" class="card-button">Configurar</a>
+                    <?php else: ?>
+                    <table class="rifas-table">
+                        <thead>
+                            <tr>
+                                <th>Rifa</th>
+                                <th>Fecha de Sorteo</th>
+                                <th>Precio del Boleto</th>
+                                <th>Progreso de Venta</th>
+                                <th>Estado</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($rifas_data as $rifa): ?>
+                            <?php 
+                                $progress_percentage = $rifa['total_tickets'] > 0 ? ($rifa['sold_tickets'] / $rifa['total_tickets']) * 100 : 0;
+                                $is_expired = strtotime($rifa['draw_date']) < time();
+                            ?>
+                            <tr>
+                                <td>
+                                    <div class="rifa-name"><?php echo htmlspecialchars($rifa['name']); ?></div>
+                                    <div class="rifa-date">
+                                        ID: #<?php echo $rifa['id']; ?>
+                                        <?php if ($rifa['days_remaining'] >= 0 && !$is_expired): ?>
+                                            • <?php echo $rifa['days_remaining']; ?> días restantes
+                                        <?php elseif ($is_expired && $rifa['status'] !== 'finished'): ?>
+                                            • <span style="color: #ef4444;">Vencida</span>
+                                        <?php endif; ?>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="rifa-date">
+                                        <?php echo $rifa['formatted_date']; ?>
+                                        <?php if ($is_expired && $rifa['status'] !== 'finished'): ?>
+                                            <br><small style="color: #ef4444;">Requiere sorteo</small>
+                                        <?php endif; ?>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="rifa-price">$<?php echo number_format($rifa['ticket_price'], 2); ?></div>
+                                    <?php if ($rifa['commission_rate'] > 0): ?>
+                                        <div style="font-size: 0.8rem; color: #6b7280;">
+                                            Comisión: <?php echo $rifa['commission_rate']; ?>%
+                                        </div>
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <div class="rifa-progress">
+                                        <div class="progress-text">
+                                            <?php echo number_format($rifa['sold_tickets']); ?> / <?php echo number_format($rifa['total_tickets']); ?> 
+                                            (<?php echo number_format($progress_percentage, 1); ?>%)
+                                        </div>
+                                        <div class="progress-bar">
+                                            <div class="progress-fill" style="width: <?php echo $progress_percentage; ?>%"></div>
+                                        </div>
+                                        <?php if ($progress_percentage >= 100): ?>
+                                            <div style="font-size: 0.8rem; color: #059669; font-weight: 600; margin-top: 0.3rem;">
+                                                ¡Agotada!
+                                            </div>
+                                        <?php endif; ?>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="rifa-status status-<?php echo $rifa['status']; ?>">
+                                        <?php 
+                                            $status_labels = [
+                                                'active' => 'Activa',
+                                                'paused' => 'Pausada',
+                                                'finished' => 'Finalizada',
+                                                'cancelled' => 'Cancelada'
+                                            ];
+                                            echo $status_labels[$rifa['status']] ?? ucfirst($rifa['status']);
+                                        ?>
+                                    </span>
+                                    <?php if ($rifa['draw_completed']): ?>
+                                        <div style="font-size: 0.8rem; color: #059669; margin-top: 0.3rem;">
+                                            <i class="fas fa-trophy"></i> Sorteada
+                                        </div>
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <div class="rifa-actions">
+                                        <button class="action-btn btn-users" 
+                                                data-tooltip="Gestionar Usuarios"
+                                                onclick="manageUsers(<?php echo $rifa['id']; ?>)">
+                                            <i class="fas fa-users"></i>
+                                        </button>
+                                        
+                                        <?php if (!$rifa['draw_completed'] && ($is_expired || $progress_percentage >= 100)): ?>
+                                        <button class="action-btn btn-draw" 
+                                                data-tooltip="Lanzar Sorteo"
+                                                onclick="launchDraw(<?php echo $rifa['id']; ?>)"
+                                                style="background: #fbbf24; color: white; border-color: #fbbf24;">
+                                            <i class="fas fa-trophy"></i>
+                                        </button>
+                                        <?php else: ?>
+                                        <button class="action-btn btn-draw" 
+                                                data-tooltip="Lanzar Sorteo"
+                                                onclick="launchDraw(<?php echo $rifa['id']; ?>)">
+                                            <i class="fas fa-trophy"></i>
+                                        </button>
+                                        <?php endif; ?>
+                                        
+                                        <button class="action-btn btn-payments" 
+                                                data-tooltip="Gestionar Pagos"
+                                                onclick="managePayments(<?php echo $rifa['id']; ?>)">
+                                            <i class="fas fa-credit-card"></i>
+                                        </button>
+                                        
+                                        <button class="action-btn btn-reports" 
+                                                data-tooltip="Ver Reportes"
+                                                onclick="viewReports(<?php echo $rifa['id']; ?>)">
+                                            <i class="fas fa-chart-bar"></i>
+                                        </button>
+                                        
+                                        <button class="action-btn btn-settings" 
+                                                data-tooltip="Configuración"
+                                                onclick="rifaSettings(<?php echo $rifa['id']; ?>)">
+                                            <i class="fas fa-cog"></i>
+                                        </button>
+                                        
+                                        <div class="status-menu-container">
+                                            <button class="action-btn btn-status-menu" 
+                                                    data-tooltip="Cambiar Estado"
+                                                    onclick="toggleStatusMenu(<?php echo $rifa['id']; ?>)">
+                                                <i class="fas fa-ellipsis-h"></i>
+                                            </button>
+                                            
+                                            <div class="status-dropdown" id="statusMenu-<?php echo $rifa['id']; ?>">
+                                                <div class="status-option active" 
+                                                     onclick="changeRifaStatus(<?php echo $rifa['id']; ?>, 'active')">
+                                                    <div class="status-dot status-dot-active"></div>
+                                                    Activa
+                                                </div>
+                                                <div class="status-option paused" 
+                                                     onclick="changeRifaStatus(<?php echo $rifa['id']; ?>, 'paused')">
+                                                    <div class="status-dot status-dot-paused"></div>
+                                                    Pausada
+                                                </div>
+                                                <div class="status-option finished" 
+                                                     onclick="changeRifaStatus(<?php echo $rifa['id']; ?>, 'finished')">
+                                                    <div class="status-dot status-dot-finished"></div>
+                                                    Finalizada
+                                                </div>
+                                                <div class="status-option cancelled" 
+                                                     onclick="changeRifaStatus(<?php echo $rifa['id']; ?>, 'cancelled')">
+                                                    <div class="status-dot status-dot-cancelled"></div>
+                                                    Cancelada
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
     </div>
 
-    <?php else: ?>
+    <?php elseif ($current_admin['user_type'] === 'committee'): ?>
     <!-- Vista Committee -->
     <div class="committee-panel">
         <div class="panel-container">
@@ -218,11 +332,7 @@ $rifas_data = [
                                 <div class="committee-type"><?php echo ucfirst($current_admin['user_type']); ?></div>
                             </div>
                             <a href="?logout=1" class="logout-btn" onclick="return confirm('¿Estás seguro de que deseas cerrar sesión?')">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-                                    <polyline points="16,17 21,12 16,7"/>
-                                    <line x1="21" y1="12" x2="9" y2="12"/>
-                                </svg>
+                                <i class="fas fa-sign-out-alt"></i>
                                 Cerrar Sesión
                             </a>
                         </div>
@@ -237,61 +347,46 @@ $rifas_data = [
                     <div class="stat-card">
                         <div class="stat-header">
                             <div class="stat-icon icon-rifas">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
-                                    <line x1="3" y1="6" x2="21" y2="6"/>
-                                    <path d="M16 10a4 4 0 0 1-8 0"/>
-                                </svg>
+                                <i class="fas fa-gift"></i>
                             </div>
                         </div>
-                        <div class="stat-number">4</div>
+                        <div class="stat-number"><?php echo $stats['active_raffles']; ?></div>
                         <div class="stat-label">Rifas Activas</div>
                     </div>
                     
                     <div class="stat-card">
                         <div class="stat-header">
                             <div class="stat-icon icon-active">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
-                                    <polyline points="22,4 12,14.01 9,11.01"/>
-                                </svg>
+                                <i class="fas fa-check-circle"></i>
                             </div>
                         </div>
-                        <div class="stat-number">2,415</div>
+                        <div class="stat-number"><?php echo number_format($stats['total_tickets_sold']); ?></div>
                         <div class="stat-label">Boletos Vendidos</div>
                     </div>
                     
                     <div class="stat-card">
                         <div class="stat-header">
                             <div class="stat-icon icon-sales">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <line x1="12" y1="1" x2="12" y2="23"/>
-                                    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-                                </svg>
+                                <i class="fas fa-dollar-sign"></i>
                             </div>
                         </div>
-                        <div class="stat-number">$45,670</div>
+                        <div class="stat-number">$<?php echo number_format($stats['monthly_sales'], 2); ?></div>
                         <div class="stat-label">Ventas del Mes</div>
-                    </div>
-                    
-                    <div class="stat-card">
-                        <div class="stat-header">
-                            <div class="stat-icon icon-satisfaction">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/>
-                                </svg>
-                            </div>
-                        </div>
-                        <div class="stat-number">98.7%</div>
-                        <div class="stat-label">Satisfacción</div>
                     </div>
                 </div>
                 
+                <!-- Tabla de rifas para committee (misma estructura pero con diferentes acciones) -->
                 <div class="rifas-table-container">
                     <div class="table-header">
-                        <h2 class="table-title">Rifas en Proceso</h2>
+                        <h2 class="table-title">Gestión de Rifas</h2>
+                        <button class="create-rifa-btn" onclick="createNewRifa()">
+                            <i class="fas fa-plus"></i>
+                            Crear Nueva Rifa
+                        </button>
                     </div>
                     
+                    <!-- Tabla similar al admin pero con acciones limitadas -->
+                    <?php if (!empty($rifas_data)): ?>
                     <table class="rifas-table">
                         <thead>
                             <tr>
@@ -305,17 +400,14 @@ $rifas_data = [
                         </thead>
                         <tbody>
                             <?php foreach ($rifas_data as $rifa): ?>
-                            <?php 
-                                $progress_percentage = ($rifa['sold_tickets'] / $rifa['total_tickets']) * 100;
-                                $formatted_date = date('d/m/Y', strtotime($rifa['draw_date']));
-                            ?>
+                            <?php $progress_percentage = $rifa['total_tickets'] > 0 ? ($rifa['sold_tickets'] / $rifa['total_tickets']) * 100 : 0; ?>
                             <tr>
                                 <td>
                                     <div class="rifa-name"><?php echo htmlspecialchars($rifa['name']); ?></div>
                                     <div class="rifa-date">ID: #<?php echo $rifa['id']; ?></div>
                                 </td>
                                 <td>
-                                    <div class="rifa-date"><?php echo $formatted_date; ?></div>
+                                    <div class="rifa-date"><?php echo $rifa['formatted_date']; ?></div>
                                 </td>
                                 <td>
                                     <div class="rifa-price">$<?php echo number_format($rifa['ticket_price'], 2); ?></div>
@@ -333,376 +425,290 @@ $rifas_data = [
                                 </td>
                                 <td>
                                     <span class="rifa-status status-<?php echo $rifa['status']; ?>">
-                                        <?php echo ucfirst($rifa['status']); ?>
+                                        <?php 
+                                            $status_labels = [
+                                                'active' => 'Activa',
+                                                'paused' => 'Pausada', 
+                                                'finished' => 'Finalizada',
+                                                'cancelled' => 'Cancelada'
+                                            ];
+                                            echo $status_labels[$rifa['status']] ?? ucfirst($rifa['status']);
+                                        ?>
                                     </span>
                                 </td>
                                 <td>
                                     <div class="rifa-actions">
-                                        <button class="action-btn btn-sellers" 
+                                        <button class="action-btn btn-users" 
                                                 data-tooltip="Vendedores"
                                                 onclick="window.location.href='sellers.php?rifa_id=<?php echo $rifa['id']; ?>'">
-                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-                                                <circle cx="8.5" cy="7" r="4"/>
-                                                <path d="M20 8v6"/>
-                                                <path d="M23 11h-6"/>
-                                            </svg>
+                                            <i class="fas fa-user-tie"></i>
                                         </button>
                                         
-                                        <button class="action-btn btn-accounting" 
+                                        <button class="action-btn btn-payments" 
                                                 data-tooltip="Contabilidad"
                                                 onclick="window.location.href='accounting.php?rifa_id=<?php echo $rifa['id']; ?>'">
-                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                <line x1="12" y1="1" x2="12" y2="23"/>
-                                                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-                                            </svg>
+                                            <i class="fas fa-calculator"></i>
                                         </button>
                                         
                                         <button class="action-btn btn-settings" 
                                                 data-tooltip="Configuración"
                                                 onclick="window.location.href='settings_committee.php?rifa_id=<?php echo $rifa['id']; ?>'">
-                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                <circle cx="12" cy="12" r="3"/>
-                                                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-                                            </svg>
+                                            <i class="fas fa-cog"></i>
                                         </button>
-                                        
-                                        <div class="status-menu-container">
-                                            <button class="action-btn btn-status-menu" 
-                                                    data-tooltip="Cambiar Estado"
-                                                    onclick="toggleStatusMenu(<?php echo $rifa['id']; ?>)">
-                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                    <circle cx="5" cy="12" r="1"/>
-                                                    <circle cx="12" cy="12" r="1"/>
-                                                    <circle cx="19" cy="12" r="1"/>
-                                                </svg>
-                                            </button>
-                                            
-                                            <div class="status-dropdown" id="statusMenu-<?php echo $rifa['id']; ?>">
-                                                <div class="status-option active" 
-                                                     onclick="changeRifaStatus(<?php echo $rifa['id']; ?>, 'active')">
-                                                    <div class="status-dot status-dot-active"></div>
-                                                    Activa
-                                                </div>
-                                                <div class="status-option paused" 
-                                                     onclick="changeRifaStatus(<?php echo $rifa['id']; ?>, 'paused')">
-                                                    <div class="status-dot status-dot-paused"></div>
-                                                    Pausada
-                                                </div>
-                                                <div class="status-option finished" 
-                                                     onclick="changeRifaStatus(<?php echo $rifa['id']; ?>, 'finished')">
-                                                    <div class="status-dot status-dot-finished"></div>
-                                                    Finalizada
-                                                </div>
-                                            </div>
-                                        </div>
                                     </div>
                                 </td>
                             </tr>
                             <?php endforeach; ?>
                         </tbody>
                     </table>
+                    <?php else: ?>
+                    <div style="padding: 3rem; text-align: center; color: #6b7280;">
+                        <i class="fas fa-gift" style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.5;"></i>
+                        <h3 style="margin-bottom: 0.5rem;">No hay rifas disponibles</h3>
+                        <p>Las rifas aparecerán aquí una vez que sean creadas</p>
+                    </div>
+                    <?php endif; ?>
                 </div>
             </div>
-                                            
-                                            <button class="action-btn btn-accounting" 
-                                                    data-tooltip="Contabilidad"
-                                                    onclick="window.location.href='accounting.php?rifa_id=<?php echo $rifa['id']; ?>'">
-                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                    <line x1="12" y1="1" x2="12" y2="23"/>
-                                                    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-                                                </svg>
-                                            </button>
-                                            
-                                            <button class="action-btn btn-settings" 
-                                                    data-tooltip="Configuración"
-                                                    onclick="window.location.href='settings_committee.php?rifa_id=<?php echo $rifa['id']; ?>'">
-                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                    <circle cx="12" cy="12" r="3"/>
-                                                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-                                                </svg>
-                                            </button>
-                                            
-                                            <div class="status-menu-container">
-                                                <button class="action-btn btn-status-menu" 
-                                                        data-tooltip="Cambiar Estado"
-                                                        onclick="toggleStatusMenu(<?php echo $rifa['id']; ?>)">
-                                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                        <circle cx="12" cy="12" r="1"/>
-                                                        <circle cx="19" cy="12" r="1"/>
-                                                        <circle cx="5" cy="12" r="1"/>
-                                                    </svg>
-                                                </button>
-                                                
-                                                <div class="status-dropdown" id="statusMenu-<?php echo $rifa['id']; ?>">
-                                                    <div class="status-option active" 
-                                                         onclick="changeRifaStatus(<?php echo $rifa['id']; ?>, 'active')">
-                                                        <div class="status-dot status-dot-active"></div>
-                                                        Activa
-                                                    </div>
-                                                    <div class="status-option paused" 
-                                                         onclick="changeRifaStatus(<?php echo $rifa['id']; ?>, 'paused')">
-                                                        <div class="status-dot status-dot-paused"></div>
-                                                        Pausada
-                                                    </div>
-                                                    <div class="status-option finished" 
-                                                         onclick="changeRifaStatus(<?php echo $rifa['id']; ?>, 'finished')">
-                                                        <div class="status-dot status-dot-finished"></div>
-                                                        Finalizada
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </td>
-                                </tr>
-                                
-                            </tbody>
-                        </table>
+        </div>
+    </div>
+
+    <?php else: ?>
+    <!-- Vista Seller (similar estructura con datos reales) -->
+    <div class="seller-panel">
+        <div class="panel-container">
+            <!-- Header Seller -->
+            <div class="seller-header">
+                <div style="flex: 1;">
+                    <div class="seller-header-top">
+                        <div>
+                            <div class="breadcrumb">
+                                <span>Panel</span>
+                            </div>
+                            <h1 class="seller-title">Panel de Vendedor</h1>
+                        </div>
+                        <div class="seller-user-info">
+                            <div class="seller-avatar">
+                                <?php echo strtoupper(substr($current_admin['username'], 0, 1)); ?>
+                            </div>
+                            <div class="seller-details">
+                                <div class="seller-name"><?php echo htmlspecialchars($current_admin['username']); ?></div>
+                                <div class="seller-type"><?php echo ucfirst($current_admin['user_type']); ?></div>
+                            </div>
+                            <a href="?logout=1" class="logout-btn" onclick="return confirm('¿Estás seguro de que deseas cerrar sesión?')">
+                                <i class="fas fa-sign-out-alt"></i>
+                                Cerrar Sesión
+                            </a>
+                        </div>
                     </div>
+                </div>
+            </div>
+
+            <!-- Content Seller -->
+            <div class="seller-content">
+                <!-- Estadísticas del Vendedor -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-icon icon-tickets">
+                                <i class="fas fa-ticket-alt"></i>
+                            </div>
+                        </div>
+                        <div class="stat-number">0</div>
+                        <div class="stat-label">Boletos Vendidos</div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-icon icon-commission">
+                                <i class="fas fa-percentage"></i>
+                            </div>
+                        </div>
+                        <div class="stat-number">$0.00</div>
+                        <div class="stat-label">Comisiones Ganadas</div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-icon icon-ranking">
+                                <i class="fas fa-medal"></i>
+                            </div>
+                        </div>
+                        <div class="stat-number">-</div>
+                        <div class="stat-label">Ranking Mensual</div>
+                    </div>
+                </div>
+                
+                <!-- Rifas Disponibles para Vender -->
+                <div class="rifas-table-container">
+                    <div class="table-header">
+                        <h2 class="table-title">Rifas Disponibles</h2>
+                        <button class="create-rifa-btn" onclick="window.location.href='sell_tickets.php'">
+                            <i class="fas fa-shopping-cart"></i>
+                            Crear Venta
+                        </button>
+                    </div>
+                    
+                    <?php if (!empty($rifas_data)): ?>
+                    <table class="rifas-table">
+                        <thead>
+                            <tr>
+                                <th>Rifa</th>
+                                <th>Precio del Boleto</th>
+                                <th>Comisión</th>
+                                <th>Disponibles</th>
+                                <th>Mis Ventas</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($rifas_data as $rifa): ?>
+                            <?php 
+                                $available_tickets = $rifa['total_tickets'] - $rifa['sold_tickets'];
+                                $my_sales = 0; // Aquí implementarías la lógica para obtener las ventas del vendedor actual
+                                $commission = $rifa['ticket_price'] * ($rifa['commission_rate'] / 100);
+                            ?>
+                            <tr>
+                                <td>
+                                    <div class="rifa-name"><?php echo htmlspecialchars($rifa['name']); ?></div>
+                                    <div class="rifa-date">Sorteo: <?php echo $rifa['formatted_date']; ?></div>
+                                </td>
+                                <td>
+                                    <div class="rifa-price">$<?php echo number_format($rifa['ticket_price'], 2); ?></div>
+                                </td>
+                                <td>
+                                    <div class="commission-info">$<?php echo number_format($commission, 2); ?></div>
+                                </td>
+                                <td>
+                                    <div class="available-tickets"><?php echo number_format($available_tickets); ?></div>
+                                </td>
+                                <td>
+                                    <div class="my-sales"><?php echo $my_sales; ?></div>
+                                </td>
+                                <td>
+                                    <div class="rifa-actions">
+                                        <button class="action-btn btn-sell" 
+                                                data-tooltip="Vender Boletos"
+                                                onclick="sellTickets(<?php echo $rifa['id']; ?>)"
+                                                <?php echo $available_tickets <= 0 ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''; ?>>
+                                            <i class="fas fa-shopping-cart"></i>
+                                        </button>
+                                        
+                                        <button class="action-btn btn-view-sales" 
+                                                data-tooltip="Ver Mis Ventas"
+                                                onclick="viewMySales(<?php echo $rifa['id']; ?>)">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                    <?php else: ?>
+                    <div style="padding: 3rem; text-align: center; color: #6b7280;">
+                        <i class="fas fa-ticket-alt" style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.5;"></i>
+                        <h3 style="margin-bottom: 0.5rem;">No hay rifas disponibles</h3>
+                        <p>Las rifas disponibles para vender aparecerán aquí</p>
+                    </div>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
     </div>
     <?php endif; ?>
 
-    
-<!-- Vista Seller -->
-<div class="seller-panel">
-    <div class="panel-container">
-        <!-- Header Seller -->
-        <div class="seller-header">
-            <div style="flex: 1;">
-                <div class="seller-header-top">
-                    <div>
-                        <div class="breadcrumb">
-                            <span>Panel</span>
-                        </div>
-                        <h1 class="seller-title">Panel de Vendedor</h1>
-                    </div>
-                    <div class="seller-user-info">
-                        <div class="seller-avatar">
-                            <?php echo strtoupper(substr($current_admin['username'], 0, 1)); ?>
-                        </div>
-                        <div class="seller-details">
-                            <div class="seller-name"><?php echo htmlspecialchars($current_admin['username']); ?></div>
-                            <div class="seller-type"><?php echo ucfirst($current_admin['user_type']); ?></div>
-                        </div>
-                        <a href="?logout=1" class="logout-btn" onclick="return confirm('¿Estás seguro de que deseas cerrar sesión?')">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-                                <polyline points="16,17 21,12 16,7"/>
-                                <line x1="21" y1="12" x2="9" y2="12"/>
-                            </svg>
-                            Cerrar Sesión
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Content Seller -->
-        <div class="seller-content">
-            <!-- Estadísticas del Vendedor -->
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-header">
-                        <div class="stat-icon icon-tickets">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M21 12V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v5"/>
-                                <path d="M3 12v5a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5"/>
-                                <circle cx="12" cy="12" r="3"/>
-                            </svg>
-                        </div>
-                    </div>
-                    <div class="stat-number">156</div>
-                    <div class="stat-label">Boletos Vendidos</div>
-                </div>
-                
-                <div class="stat-card">
-                    <div class="stat-header">
-                        <div class="stat-icon icon-commission">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <line x1="12" y1="1" x2="12" y2="23"/>
-                                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-                            </svg>
-                        </div>
-                    </div>
-                    <div class="stat-number">$2,340</div>
-                    <div class="stat-label">Comisiones Ganadas</div>
-                </div>
-                
-                <div class="stat-card">
-                    <div class="stat-header">
-                        <div class="stat-icon icon-month">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
-                                <line x1="16" y1="2" x2="16" y2="6"/>
-                                <line x1="8" y1="2" x2="8" y2="6"/>
-                                <line x1="3" y1="10" x2="21" y2="10"/>
-                            </svg>
-                        </div>
-                    </div>
-                    <div class="stat-number">45</div>
-                    <div class="stat-label">Ventas Este Mes</div>
-                </div>
-                
-                <div class="stat-card">
-                    <div class="stat-header">
-                        <div class="stat-icon icon-ranking">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/>
-                                <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/>
-                                <path d="M4 22h16"/>
-                                <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/>
-                                <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/>
-                                <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>
-                            </svg>
-                        </div>
-                    </div>
-                    <div class="stat-number">#3</div>
-                    <div class="stat-label">Ranking Mensual</div>
-                </div>
-            </div>
+    <script>
+        // Funciones para el Admin
+        function createNewRifa() {
+            window.location.href = 'admin_create_raffle.php';
+        }
+        
+        function manageUsers(rifaId) {
+            window.location.href = 'admin_create_user.php?rifa_id=' + rifaId;
+        }
+        
+        function launchDraw(rifaId) {
+            if (confirm(`¿Estás seguro de que deseas lanzar el sorteo para la rifa ID: ${rifaId}?`)) {
+                window.location.href = 'admin_run_raffle.php?rifa_id=' + rifaId;
+            }
+        }
+        
+        function managePayments(rifaId) {
+            window.location.href = 'admin_payments.php?rifa_id=' + rifaId;
+        }
+        
+        function viewReports(rifaId) {
+            window.location.href = 'admin_reports.php?rifa_id=' + rifaId;
+        }
+        
+        function rifaSettings(rifaId) {
+            window.location.href = 'admin_settings.php?rifa_id=' + rifaId;
+        }
+        
+        // Funciones para status menu
+        function toggleStatusMenu(rifaId) {
+            const menu = document.getElementById('statusMenu-' + rifaId);
+            const allMenus = document.querySelectorAll('.status-dropdown');
             
-            <!-- Panel de Rifas Disponibles -->
-            <div class="rifas-table-container">
-                <div class="table-header">
-                    <h2 class="table-title">Rifas Disponibles para Venta</h2>
-                    <p class="table-subtitle">Rifas activas donde puedes vender boletos y ganar comisiones</p>
-                </div>
-                
-                <table class="rifas-table">
-                    <thead>
-                        <tr>
-                            <th>Rifa</th>
-                            <th>Fecha de Sorteo</th>
-                            <th>Precio del Boleto</th>
-                            <th>Tu Comisión</th>
-                            <th>Progreso de Venta</th>
-                            <th>Tus Ventas</th>
-                            <th>Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($rifas_data as $rifa): ?>
-                        <?php 
-                            $progress_percentage = ($rifa['sold_tickets'] / $rifa['total_tickets']) * 100;
-                            $formatted_date = date('d/m/Y', strtotime($rifa['draw_date']));
-                            $commission_rate = 0.10; // 10% de comisión
-                            $commission_amount = $rifa['ticket_price'] * $commission_rate;
-                            $seller_sales = rand(5, 25); // Simulación de ventas del vendedor
-                            $seller_earnings = $seller_sales * $commission_amount;
-                        ?>
-                        <tr>
-                            <td>
-                                <div class="rifa-name"><?php echo htmlspecialchars($rifa['name']); ?></div>
-                                <div class="rifa-date">ID: #<?php echo $rifa['id']; ?></div>
-                            </td>
-                            <td>
-                                <div class="rifa-date"><?php echo $formatted_date; ?></div>
-                            </td>
-                            <td>
-                                <div class="rifa-price">$<?php echo number_format($rifa['ticket_price'], 2); ?></div>
-                            </td>
-                            <td>
-                                <div class="commission-amount">$<?php echo number_format($commission_amount, 2); ?></div>
-                                <div class="commission-rate">(<?php echo ($commission_rate * 100); ?>%)</div>
-                            </td>
-                            <td>
-                                <div class="rifa-progress">
-                                    <div class="progress-text">
-                                        <?php echo number_format($rifa['sold_tickets']); ?> / <?php echo number_format($rifa['total_tickets']); ?> 
-                                        (<?php echo number_format($progress_percentage, 1); ?>%)
-                                    </div>
-                                    <div class="progress-bar">
-                                        <div class="progress-fill" style="width: <?php echo $progress_percentage; ?>%"></div>
-                                    </div>
-                                </div>
-                            </td>
-                            <td>
-                                <div class="seller-sales">
-                                    <div class="sales-count"><?php echo $seller_sales; ?> vendidos</div>
-                                    <div class="sales-earnings">$<?php echo number_format($seller_earnings, 2); ?></div>
-                                </div>
-                            </td>
-                            <td>
-                                <div class="rifa-actions">
-                                    <button class="action-btn btn-sell" 
-                                            data-tooltip="Vender Boletos"
-                                            onclick="window.location.href='sell_tickets.php?rifa_id=<?php echo $rifa['id']; ?>'">
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <path d="M21 12V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v5"/>
-                                            <path d="M3 12v5a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5"/>
-                                            <circle cx="12" cy="12" r="3"/>
-                                        </svg>
-                                    </button>
-                                    
-                                    <button class="action-btn btn-history" 
-                                            data-tooltip="Historial de Ventas"
-                                            onclick="window.location.href='sales_history.php?rifa_id=<?php echo $rifa['id']; ?>'">
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <circle cx="12" cy="12" r="10"/>
-                                            <polyline points="12,6 12,12 16,14"/>
-                                        </svg>
-                                    </button>
-                                    
-                                    <button class="action-btn btn-details" 
-                                            data-tooltip="Ver Detalles"
-                                            onclick="window.location.href='raffle_details.php?rifa_id=<?php echo $rifa['id']; ?>'">
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <circle cx="12" cy="12" r="3"/>
-                                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-                                        </svg>
-                                    </button>
-                                </div>
-                            </td>
-                        </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
+            // Cerrar todos los otros menús
+            allMenus.forEach(m => {
+                if (m !== menu) {
+                    m.classList.remove('active');
+                }
+            });
             
-            <!-- Panel de Acciones Rápidas -->
-            <div class="quick-actions">
-                <div class="action-card">
-                    <div class="action-icon">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M21 12V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v5"/>
-                            <path d="M3 12v5a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5"/>
-                            <circle cx="12" cy="12" r="3"/>
-                        </svg>
-                    </div>
-                    <h3>Venta Rápida</h3>
-                    <p>Acceso rápido para vender boletos de cualquier rifa activa</p>
-                    <button class="action-button">Vender Ahora</button>
-                </div>
+            // Toggle el menú actual
+            menu.classList.toggle('active');
+        }
+        
+        function changeRifaStatus(rifaId, newStatus) {
+            if (confirm(`¿Estás seguro de cambiar el estado de la rifa?`)) {
+                // Hacer petición AJAX para cambiar el estado
+                fetch('update_raffle_status.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        raffle_id: rifaId,
+                        status: newStatus
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        location.reload();
+                    } else {
+                        alert('Error al cambiar el estado: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    alert('Error de conexión: ' + error);
+                });
                 
-                <div class="action-card">
-                    <div class="action-icon">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <line x1="12" y1="1" x2="12" y2="23"/>
-                            <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-                        </svg>
-                    </div>
-                    <h3>Mis Comisiones</h3>
-                    <p>Revisa el detalle de tus comisiones y ganancias</p>
-                    <button class="action-button">Ver Comisiones</button>
-                </div>
-                
-                <div class="action-card">
-                    <div class="action-icon">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M14 9V5a3 3 0 0 0-6 0v4"/>
-                            <rect x="2" y="9" width="20" height="11" rx="2" ry="2"/>
-                        </svg>
-                    </div>
-                    <h3>Sorteos Ganados</h3>
-                    <p>Histórico de sorteos donde tus clientes han resultado ganadores</p>
-                    <button class="action-button">Ver Ganadores</button>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
+                // Cerrar el menú
+                document.getElementById('statusMenu-' + rifaId).classList.remove('active');
+            }
+        }
+        
+        // Funciones para vendedores
+        function sellTickets(rifaId) {
+            window.location.href = 'sell_tickets.php?rifa_id=' + rifaId;
+        }
+        
+        function viewMySales(rifaId) {
+            window.location.href = 'my_sales.php?rifa_id=' + rifaId;
+        }
+        
+        // Cerrar menús al hacer clic fuera
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.status-menu-container')) {
+                document.querySelectorAll('.status-dropdown').forEach(menu => {
+                    menu.classList.remove('active');
+                });
+            }
+        });
+    </script>
 </body>
 </html>

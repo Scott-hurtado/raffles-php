@@ -1,9 +1,9 @@
 /**
- * Index Page JavaScript
+ * Index Page JavaScript - Real-time Version
  * 
  * Handles all functionality for the main index page including:
- * - Countdown timer
- * - Rifas slider
+ * - Real-time raffle data loading
+ * - Countdown timer with real dates
  * - Ticket selection
  * - Contact form
  * - Package purchasing
@@ -13,8 +13,11 @@ class IndexController {
     constructor() {
         this.selectedTickets = [];
         this.takenTickets = [];
-        this.ticketPrice = 5.00;
+        this.currentRaffle = null;
+        this.ticketPrice = 5.00; // Default price, will be updated when a raffle is selected
         this.countdownInterval = null;
+        this.rafflesData = [];
+        this.refreshInterval = null;
         
         this.init();
     }
@@ -25,8 +28,9 @@ class IndexController {
     init() {
         this.initializeNavbar();
         this.initCountdown();
-        this.initRifasSlider();
+        this.loadRaffles();
         this.initTicketSelection();
+        this.startAutoRefresh();
     }
 
     /**
@@ -39,15 +43,96 @@ class IndexController {
     }
 
     /**
-     * Initialize countdown timer
+     * Load raffles from the API
+     */
+    async loadRaffles() {
+        try {
+            const loadingElement = document.getElementById('raffles-loading');
+            const sliderWrapper = document.querySelector('.rifas-slider-wrapper');
+            const noRafflesMessage = document.getElementById('no-raffles-message');
+            
+            if (loadingElement) loadingElement.style.display = 'block';
+            if (sliderWrapper) sliderWrapper.style.display = 'none';
+            if (noRafflesMessage) noRafflesMessage.style.display = 'none';
+
+            const response = await fetch(window.APP_DATA?.apiUrl || './api/get_raffles.php');
+            const data = await response.json();
+
+            if (data.success && data.data) {
+                this.rafflesData = data.data;
+                if (this.rafflesData.length > 0) {
+                    this.initRifasSlider();
+                    this.populateRaffleSelector(); // Populate raffle selector
+                    if (loadingElement) loadingElement.style.display = 'none';
+                    if (sliderWrapper) sliderWrapper.style.display = 'block';
+                } else {
+                    if (loadingElement) loadingElement.style.display = 'none';
+                    if (noRafflesMessage) noRafflesMessage.style.display = 'block';
+                }
+            } else {
+                console.error('Error loading raffles:', data.error || 'Unknown error');
+                this.showFallbackRaffles();
+            }
+        } catch (error) {
+            console.error('Error fetching raffles:', error);
+            this.showFallbackRaffles();
+        }
+    }
+
+    /**
+     * Show fallback message when raffles can't be loaded
+     */
+    showFallbackRaffles() {
+        const loadingElement = document.getElementById('raffles-loading');
+        const noRafflesMessage = document.getElementById('no-raffles-message');
+        
+        if (loadingElement) loadingElement.style.display = 'none';
+        if (noRafflesMessage) {
+            noRafflesMessage.style.display = 'block';
+            noRafflesMessage.innerHTML = `
+                <div style="text-align: center; padding: 3rem; color: #ef4444;">
+                    <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" style="margin-bottom: 1rem; opacity: 0.5;">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="m15 9-6 6"/>
+                        <path d="m9 9 6 6"/>
+                    </svg>
+                    <h3 style="margin-bottom: 0.5rem;">Error al cargar rifas</h3>
+                    <p>No se pudieron cargar las rifas. Intenta recargar la página.</p>
+                    <button onclick="indexController.loadRaffles()" style="margin-top: 1rem; padding: 0.5rem 1rem; background: #667eea; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                        Reintentar
+                    </button>
+                </div>
+            `;
+        }
+    }
+
+    /**
+     * Start auto-refresh for raffles
+     */
+    startAutoRefresh() {
+        // Refresh raffles every 30 seconds
+        this.refreshInterval = setInterval(() => {
+            this.loadRaffles();
+        }, 30000);
+    }
+
+    /**
+     * Initialize countdown timer using real raffle date
      */
     initCountdown() {
-        // Set target date (7 days from now - you can change this)
-        const targetDate = new Date();
-        targetDate.setDate(targetDate.getDate() + 7);
-        targetDate.setHours(targetDate.getHours() + 15);
-        targetDate.setMinutes(targetDate.getMinutes() + 49);
-        targetDate.setSeconds(targetDate.getSeconds() + 28);
+        let targetDate = null;
+
+        // Try to use the next raffle date from PHP
+        if (window.APP_DATA?.nextRaffleDate) {
+            targetDate = new Date(window.APP_DATA.nextRaffleDate);
+        } else {
+            // Fallback: Set target date 7 days from now
+            targetDate = new Date();
+            targetDate.setDate(targetDate.getDate() + 7);
+            targetDate.setHours(targetDate.getHours() + 15);
+            targetDate.setMinutes(targetDate.getMinutes() + 49);
+            targetDate.setSeconds(targetDate.getSeconds() + 28);
+        }
 
         const updateCountdown = () => {
             const now = new Date().getTime();
@@ -141,86 +226,63 @@ class IndexController {
         if (this.countdownInterval) {
             clearInterval(this.countdownInterval);
         }
+
+        // Reload raffles to get the next one
+        this.loadRaffles();
     }
 
     /**
-     * Initialize rifas slider
+     * Initialize rifas slider with real data
      */
     initRifasSlider() {
-        const rifasData = [
-            {
-                id: 1,
-                name: "iPhone 15 Pro Max",
-                date: "15 AGO • 20:00",
-                price: "$50.00",
-                image: "https://images.unsplash.com/photo-1695048133142-1a20484d2569?w=150&h=150&fit=crop&crop=center"
-            },
-            {
-                id: 2,
-                name: "PlayStation 5 + Juegos",
-                date: "20 AGO • 18:30",
-                price: "$30.00",
-                image: "https://images.unsplash.com/photo-1606813907291-d86efa9b94db?w=150&h=150&fit=crop&crop=center"
-            },
-            {
-                id: 3,
-                name: "MacBook Air M2",
-                date: "25 AGO • 19:00",
-                price: "$75.00",
-                image: "https://images.unsplash.com/photo-1541807084-5c52b6b3adef?w=150&h=150&fit=crop&crop=center"
-            },
-            {
-                id: 4,
-                name: "Tesla Model 3",
-                date: "30 AGO • 21:00",
-                price: "$500.00",
-                image: "https://images.unsplash.com/photo-1560958089-b8a1929cea89?w=150&h=150&fit=crop&crop=center"
-            },
-            {
-                id: 5,
-                name: "Apple Watch Ultra",
-                date: "05 SEP • 17:00",
-                price: "$40.00",
-                image: "https://images.unsplash.com/photo-1434493789847-2f02dc6ca35d?w=150&h=150&fit=crop&crop=center"
-            },
-            {
-                id: 6,
-                name: "Samsung Galaxy S24",
-                date: "10 SEP • 19:30",
-                price: "$45.00",
-                image: "https://images.unsplash.com/photo-1592899677977-9c10ca588bbd?w=150&h=150&fit=crop&crop=center"
-            },
-            {
-                id: 7,
-                name: "Nintendo Switch OLED",
-                date: "12 SEP • 16:00",
-                price: "$35.00",
-                image: "https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=150&h=150&fit=crop&crop=center"
-            },
-            {
-                id: 8,
-                name: "iPad Pro 12.9\"",
-                date: "18 SEP • 20:30",
-                price: "$60.00",
-                image: "https://images.unsplash.com/photo-1544244015-0df4b3ffc6b0?w=150&h=150&fit=crop&crop=center"
-            }
-        ];
-
         const slider = document.getElementById('rifasSlider');
-        if (!slider) return;
+        if (!slider || !this.rafflesData.length) return;
 
-        // Add cards twice for seamless infinite scroll
-        const allCards = [...rifasData, ...rifasData];
-        slider.innerHTML = allCards.map(rifa => this.createRifaCard(rifa)).join('');
+        let cardsData = [...this.rafflesData];
+        
+        // Only duplicate if we have multiple raffles for smooth scrolling
+        // If we only have 1-2 raffles, just repeat them to fill the space
+        if (this.rafflesData.length === 1) {
+            cardsData = Array(8).fill(this.rafflesData[0]); // Show same raffle 8 times for visual effect
+        } else if (this.rafflesData.length === 2) {
+            cardsData = [...this.rafflesData, ...this.rafflesData, ...this.rafflesData, ...this.rafflesData];
+        } else if (this.rafflesData.length < 6) {
+            cardsData = [...this.rafflesData, ...this.rafflesData]; // Duplicate for seamless scroll
+        }
+        
+        slider.innerHTML = cardsData.map((rifa, index) => this.createRifaCard(rifa, index)).join('');
     }
 
     /**
-     * Create HTML for a rifa card
+     * Create HTML for a rifa card with real data
      */
-    createRifaCard(rifa) {
+    createRifaCard(rifa, index = 0) {
+        // Determine status
+        let statusClass = 'available';
+        let statusText = 'Disponible';
+        
+        if (rifa.available_tickets === 0) {
+            statusClass = 'sold-out';
+            statusText = 'Agotada';
+        } else if (rifa.progress_percentage > 80) {
+            statusClass = 'limited';
+            statusText = 'Últimos boletos';
+        }
+
+        // Use the image from the API, with a fallback
+        let imageUrl = rifa.image;
+        
+        // If it's a default placeholder, try to use a better fallback based on the raffle name
+        if (imageUrl.includes('unsplash.com') && rifa.name.toLowerCase().includes('moto')) {
+            imageUrl = 'https://images.unsplash.com/photo-1558618047-3c8c76ca7d13?w=150&h=150&fit=crop&crop=center';
+        }
+
         return `
-            <div class="rifa-card" data-id="${rifa.id}">
-                <img src="${rifa.image}" alt="${rifa.name}" class="rifa-image">
+            <div class="rifa-card" data-id="${rifa.id}" data-price="${rifa.price_value}" data-index="${index}">
+                <img src="${imageUrl}" 
+                     alt="${rifa.name}" 
+                     class="rifa-image" 
+                     onerror="this.onerror=null; this.src='https://images.unsplash.com/photo-1558618047-3c8c76ca7d13?w=150&h=150&fit=crop&crop=center';">
                 <div class="rifa-content">
                     <h3 class="rifa-name">${rifa.name}</h3>
                     <div class="rifa-date">
@@ -230,10 +292,21 @@ class IndexController {
                         ${rifa.date}
                     </div>
                     <p class="rifa-price">${rifa.price}</p>
+                    <div class="raffle-status ${statusClass}">${statusText}</div>
+                    ${rifa.progress_percentage > 0 ? `
+                        <div class="raffle-progress">
+                            <div class="progress-text">${rifa.sold_tickets.toLocaleString()} / ${rifa.total_tickets.toLocaleString()} vendidos (${rifa.progress_percentage}%)</div>
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: ${rifa.progress_percentage}%"></div>
+                            </div>
+                        </div>
+                    ` : ''}
                 </div>
                 <div class="rifa-actions">
-                    <button class="buy-button" onclick="buyTicket(${rifa.id}, '${rifa.name}')">
-                        Comprar Boleto
+                    <button class="buy-button" 
+                            onclick="selectRaffle(${rifa.id}, '${rifa.name.replace(/'/g, "\\'")}', ${rifa.price_value})"
+                            ${rifa.available_tickets === 0 ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''}>
+                        ${rifa.available_tickets === 0 ? 'Agotada' : 'Seleccionar'}
                     </button>
                 </div>
             </div>
@@ -241,12 +314,183 @@ class IndexController {
     }
 
     /**
+     * Populate the raffle selector dropdown
+     */
+    populateRaffleSelector() {
+        const selector = document.getElementById('raffleSelector');
+        if (!selector || !this.rafflesData.length) return;
+
+        // Clear existing options
+        selector.innerHTML = '<option value="">Selecciona una rifa...</option>';
+
+        // Add raffle options
+        this.rafflesData.forEach(raffle => {
+            const option = document.createElement('option');
+            option.value = raffle.id;
+            option.textContent = `${raffle.name} - ${raffle.price} (${raffle.available_tickets.toLocaleString()} disponibles)`;
+            selector.appendChild(option);
+        });
+    }
+
+    /**
+     * Handle raffle selection change
+     */
+    onRaffleChange(raffleId) {
+        if (!raffleId) {
+            // No raffle selected - show message
+            this.currentRaffle = null;
+            this.showTicketSelectionMessage();
+            this.hideSelectedRaffleInfo();
+            this.clearAllSelectedTickets();
+            return;
+        }
+
+        // Find the selected raffle
+        const raffle = this.rafflesData.find(r => r.id == raffleId);
+        if (!raffle) return;
+
+        // Update current raffle
+        this.currentRaffle = raffle;
+        this.ticketPrice = raffle.price_value;
+
+        // Update raffle info display
+        this.updateSelectedRaffleInfo(raffle);
+        this.showSelectedRaffleInfo();
+
+        // Clear previous selections
+        this.clearAllSelectedTickets();
+
+        // Generate tickets for this raffle
+        this.generateTakenTicketsFromRaffle(raffle);
+        this.generateTicketsGrid();
+        
+        // Show tickets grid
+        this.showTicketsGrid();
+
+        // Update price display in sidebar
+        const ticketPriceElement = document.getElementById('ticketPrice');
+        if (ticketPriceElement) {
+            ticketPriceElement.textContent = raffle.price;
+        }
+
+        // Update summary
+        this.updateSummary();
+    }
+
+    /**
+     * Update selected raffle info display
+     */
+    updateSelectedRaffleInfo(raffle) {
+        const elements = {
+            selectedRafflePrice: document.getElementById('selectedRafflePrice'),
+            selectedRaffleTotal: document.getElementById('selectedRaffleTotal'),
+            selectedRaffleSold: document.getElementById('selectedRaffleSold'),
+            selectedRaffleAvailable: document.getElementById('selectedRaffleAvailable')
+        };
+
+        if (elements.selectedRafflePrice) {
+            elements.selectedRafflePrice.textContent = raffle.price;
+        }
+        if (elements.selectedRaffleTotal) {
+            elements.selectedRaffleTotal.textContent = raffle.total_tickets.toLocaleString();
+        }
+        if (elements.selectedRaffleSold) {
+            elements.selectedRaffleSold.textContent = raffle.sold_tickets.toLocaleString();
+        }
+        if (elements.selectedRaffleAvailable) {
+            elements.selectedRaffleAvailable.textContent = raffle.available_tickets.toLocaleString();
+        }
+    }
+
+    /**
+     * Show selected raffle info
+     */
+    showSelectedRaffleInfo() {
+        const info = document.getElementById('selectedRaffleInfo');
+        if (info) info.style.display = 'block';
+    }
+
+    /**
+     * Hide selected raffle info
+     */
+    hideSelectedRaffleInfo() {
+        const info = document.getElementById('selectedRaffleInfo');
+        if (info) info.style.display = 'none';
+    }
+
+    /**
+     * Show ticket selection message
+     */
+    showTicketSelectionMessage() {
+        const message = document.getElementById('ticketSelectionMessage');
+        const grid = document.getElementById('ticketsGrid');
+        
+        if (message) message.style.display = 'block';
+        if (grid) grid.style.display = 'none';
+    }
+
+    /**
+     * Show tickets grid
+     */
+    showTicketsGrid() {
+        const message = document.getElementById('ticketSelectionMessage');
+        const grid = document.getElementById('ticketsGrid');
+        
+        if (message) message.style.display = 'none';
+        if (grid) grid.style.display = 'grid';
+    }
+
+    /**
+     * Clear all selected tickets without confirmation
+     */
+    clearAllSelectedTickets() {
+        // Reset all selected tickets to available
+        this.selectedTickets.forEach(ticket => {
+            const ticketElement = document.querySelector(`[data-ticket="${ticket}"]`);
+            if (ticketElement) {
+                ticketElement.classList.remove('selected');
+                ticketElement.classList.add('available');
+            }
+        });
+
+        this.selectedTickets = [];
+        
+        const manualQuantityInput = document.getElementById('manualQuantity');
+        if (manualQuantityInput) {
+            manualQuantityInput.value = 0;
+        }
+        
+        this.updateSummary();
+        this.updateSelectedTicketsList();
+    }
+
+    /**
+     * Generate taken tickets based on raffle data
+     */
+    generateTakenTicketsFromRaffle(raffle) {
+        this.takenTickets = [];
+        
+        // Simulate taken tickets based on sold tickets count
+        const soldCount = raffle.sold_tickets || 0;
+        const totalTickets = raffle.total_tickets || 1000;
+        
+        // Generate random taken tickets
+        for (let i = 0; i < soldCount; i++) {
+            let randomTicket;
+            do {
+                randomTicket = Math.floor(Math.random() * totalTickets) + 1;
+            } while (this.takenTickets.includes(randomTicket));
+            
+            this.takenTickets.push(randomTicket);
+        }
+    }
+
+    /**
      * Initialize ticket selection functionality
      */
     initTicketSelection() {
-        // Generate some random taken tickets for demo
-        this.generateTakenTickets();
-        this.generateTicketsGrid();
+        // Show initial message to select a raffle
+        this.showTicketSelectionMessage();
         this.updateSummary();
     }
 
@@ -254,6 +498,7 @@ class IndexController {
      * Generate random taken tickets for demonstration
      */
     generateTakenTickets() {
+        this.takenTickets = [];
         for (let i = 0; i < 150; i++) {
             const randomTicket = Math.floor(Math.random() * 1000) + 1;
             if (!this.takenTickets.includes(randomTicket)) {
@@ -263,15 +508,16 @@ class IndexController {
     }
 
     /**
-     * Generate the tickets grid
+     * Generate the tickets grid using the selected raffle's ticket count
      */
     generateTicketsGrid() {
         const grid = document.getElementById('ticketsGrid');
-        if (!grid) return;
+        if (!grid || !this.currentRaffle) return;
 
+        const totalTickets = this.currentRaffle.total_tickets;
         let ticketsHTML = '';
 
-        for (let i = 1; i <= 1000; i++) {
+        for (let i = 1; i <= totalTickets; i++) {
             let ticketClass = 'available';
             if (this.takenTickets.includes(i)) {
                 ticketClass = 'taken';
@@ -283,7 +529,7 @@ class IndexController {
                 <div class="ticket-item ${ticketClass}" 
                      data-ticket="${i}" 
                      onclick="toggleTicket(${i})">
-                    ${i.toString().padStart(4, '0')}
+                    ${i.toString().padStart(String(totalTickets).length, '0')}
                 </div>
             `;
         }
@@ -295,6 +541,11 @@ class IndexController {
      * Toggle ticket selection
      */
     toggleTicket(ticketNumber) {
+        if (!this.currentRaffle) {
+            alert('Por favor, selecciona una rifa primero');
+            return;
+        }
+
         // Don't allow selecting taken tickets
         if (this.takenTickets.includes(ticketNumber)) {
             return;
@@ -339,7 +590,7 @@ class IndexController {
         // Update checkout button state
         const checkoutBtn = document.querySelector('.checkout-btn');
         if (checkoutBtn) {
-            checkoutBtn.disabled = totalTickets === 0;
+            checkoutBtn.disabled = totalTickets === 0 || !this.currentRaffle;
         }
     }
 
@@ -389,14 +640,21 @@ class IndexController {
      * Add random tickets to selection
      */
     addRandomTickets(quantity) {
+        if (!this.currentRaffle) {
+            alert('Por favor, selecciona una rifa primero');
+            return;
+        }
+
         if (quantity === 0) {
             alert('Por favor, selecciona una cantidad mayor a 0');
             return;
         }
 
         // Get available tickets (not taken and not selected)
+        const totalTickets = this.currentRaffle.total_tickets;
         const availableTickets = [];
-        for (let i = 1; i <= 1000; i++) {
+        
+        for (let i = 1; i <= totalTickets; i++) {
             if (!this.takenTickets.includes(i) && !this.selectedTickets.includes(i)) {
                 availableTickets.push(i);
             }
@@ -468,6 +726,11 @@ class IndexController {
      * Proceed to payment
      */
     proceedToPayment() {
+        if (!this.currentRaffle) {
+            alert('Por favor, selecciona una rifa primero');
+            return;
+        }
+
         if (this.selectedTickets.length === 0) {
             alert('No has seleccionado ningún boleto');
             return;
@@ -476,9 +739,18 @@ class IndexController {
         const totalAmount = this.selectedTickets.length * this.ticketPrice;
         const ticketList = this.selectedTickets.sort((a, b) => a - b).map(t => t.toString().padStart(4, '0')).join(', ');
         
-        if (confirm(`¿Proceder al pago?\n\nBoletos seleccionados: ${this.selectedTickets.length}\nNúmeros: ${ticketList}\nTotal: $${totalAmount.toFixed(2)}`)) {
+        if (confirm(`¿Proceder al pago?\n\nRifa: ${this.currentRaffle.name}\nBoletos seleccionados: ${this.selectedTickets.length}\nNúmeros: ${ticketList}\nTotal: $${totalAmount.toFixed(2)}`)) {
+            // Here you would send the data to a payment processing endpoint
+            const paymentData = {
+                raffle_id: this.currentRaffle.id,
+                raffle_name: this.currentRaffle.name,
+                tickets: this.selectedTickets,
+                total_amount: totalAmount,
+                ticket_price: this.ticketPrice
+            };
+            
+            console.log('Payment data:', paymentData);
             alert('Redirigiendo al procesador de pagos...\n\n¡Gracias por tu compra!');
-            // Here you would redirect to payment processor
             // window.location.href = '/payment';
         }
     }
@@ -513,6 +785,18 @@ class IndexController {
             event.target.reset();
         }, 2000);
     }
+
+    /**
+     * Cleanup method
+     */
+    destroy() {
+        if (this.countdownInterval) {
+            clearInterval(this.countdownInterval);
+        }
+        if (this.refreshInterval) {
+            clearInterval(this.refreshInterval);
+        }
+    }
 }
 
 // Global functions for backward compatibility and HTML onclick handlers
@@ -529,6 +813,38 @@ function handleHeroClick() {
 
 function buyTicket(id, name) {
     alert(`¡Compraste un boleto para la rifa: ${name}!\nID de rifa: ${id}`);
+}
+
+function selectRaffle(raffleId, raffleName, ticketPrice) {
+    if (indexController) {
+        // Set the dropdown to the selected raffle
+        const selector = document.getElementById('raffleSelector');
+        if (selector) {
+            selector.value = raffleId;
+        }
+        
+        // Call the raffle change handler
+        indexController.onRaffleChange(raffleId);
+        
+        // Scroll to ticket selection
+        const ticketSection = document.querySelector('.ticket-selection-container');
+        if (ticketSection) {
+            ticketSection.scrollIntoView({ 
+                behavior: 'smooth' 
+            });
+        }
+
+        alert(`Has seleccionado la rifa: ${raffleName}\nPrecio por boleto: ${ticketPrice}\nAhora puedes elegir tus boletos abajo.`);
+    }
+}
+
+function onRaffleChange() {
+    const selector = document.getElementById('raffleSelector');
+    const raffleId = selector ? selector.value : '';
+    
+    if (indexController) {
+        indexController.onRaffleChange(raffleId);
+    }
 }
 
 function buyPackage(tickets, price) {
@@ -618,6 +934,13 @@ function submitContactForm(event) {
 // Initialize when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     indexController = new IndexController();
+});
+
+// Cleanup on page unload
+window.addEventListener('beforeunload', () => {
+    if (indexController) {
+        indexController.destroy();
+    }
 });
 
 // Export for module systems if needed
