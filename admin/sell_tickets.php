@@ -132,7 +132,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 status, created_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed', NOW())";
             
-            $sale_id = executeQuery($sql_sale, [
+            // Preparar y ejecutar la consulta de inserción
+            $pdo = getDB();
+            $stmt = $pdo->prepare($sql_sale);
+            $stmt->execute([
                 $raffle_id,
                 $current_admin['id'], 
                 $customer_name,
@@ -148,7 +151,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $change_amount,
                 json_encode($ticket_numbers),
                 $notes
-            ], true);
+            ]);
+            
+            // Obtener el ID de la venta recién insertada
+            $sale_id = $pdo->lastInsertId();
 
             // Actualizar contador de boletos vendidos
             $sql_update = "UPDATE raffles SET 
@@ -161,10 +167,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $pdo->commit();
 
             // Log de actividad
-            logAdminActivity('sell_tickets', "Venta #$sale_id: {$quantity} boletos de rifa '{$raffle['name']}' - Cliente: {$customer_name} - Total: ${$total_amount} - Comisión: ${$commission_amount}");
+            logAdminActivity('sell_tickets', "Venta #{$sale_id}: {$quantity} boletos de rifa '{$raffle['name']}' - Cliente: {$customer_name} - Total: $" . number_format($total_amount, 2) . " - Comisión: $" . number_format($commission_amount, 2));
             
             $success_message = "¡Venta registrada exitosamente!\n";
-            $success_message .= "ID de Venta: #$sale_id\n";
+            $success_message .= "ID de Venta: #{$sale_id}\n";
             $success_message .= "Boletos: " . implode(', ', $ticket_numbers) . "\n";
             $success_message .= "Total: $" . number_format($total_amount, 2) . "\n";
             $success_message .= "Tu comisión: $" . number_format($commission_amount, 2);
