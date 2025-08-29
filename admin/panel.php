@@ -15,7 +15,7 @@ if (isset($_GET['logout'])) {
     exit();
 }
 
-// Obtener rifas reales de la base de datos
+// Obtener rifas reales de la base de datos con datos actualizados
 $rifas_data = [];
 try {
     $sql = "SELECT 
@@ -24,7 +24,7 @@ try {
                 a.username as created_by_name
             FROM raffles r 
             LEFT JOIN admins a ON r.created_by = a.id 
-            ORDER BY r.created_at DESC";
+            ORDER BY r.updated_at DESC, r.created_at DESC";
     
     $rifas_data = fetchAll($sql);
     
@@ -40,37 +40,55 @@ try {
         // Formatear fecha para mostrar
         $rifa['formatted_date'] = date('d/m/Y H:i', strtotime($rifa['draw_date']));
         $rifa['days_remaining'] = ceil((strtotime($rifa['draw_date']) - time()) / 86400);
+        
+        // Calcular potencial de ingresos basado en precio actual
+        $rifa['potential_revenue'] = $rifa['total_tickets'] * $rifa['ticket_price'];
+        $rifa['current_revenue'] = $rifa['sold_tickets'] * $rifa['ticket_price'];
+        
+        // Calcular comisiones totales
+        $rifa['total_commission'] = $rifa['current_revenue'] * ($rifa['commission_rate'] / 100);
     }
 } catch (Exception $e) {
     error_log("Error al obtener rifas: " . $e->getMessage());
     $rifas_data = [];
 }
 
-// Estadísticas generales
+// Estadísticas generales actualizadas
 $stats = [
     'active_raffles' => 0,
     'total_users' => 0,
     'monthly_sales' => 0,
-    'total_tickets_sold' => 0
+    'total_tickets_sold' => 0,
+    'total_revenue' => 0,
+    'total_commissions' => 0
 ];
 
 try {
     // Rifas activas
     $stats['active_raffles'] = fetchOne("SELECT COUNT(*) as count FROM raffles WHERE status = 'active'")['count'] ?? 0;
     
-    // Total de usuarios registrados (si tienes tabla de usuarios)
+    // Total de usuarios registrados
     $stats['total_users'] = fetchOne("SELECT COUNT(*) as count FROM admins")['count'] ?? 0;
     
-    // Ventas del mes
-    $stats['monthly_sales'] = fetchOne("
+    // Ventas del mes (usando precio actual de cada rifa)
+    $monthly_sales_query = "
         SELECT COALESCE(SUM(r.ticket_price * r.sold_tickets), 0) as total 
         FROM raffles r 
         WHERE MONTH(r.created_at) = MONTH(CURRENT_DATE()) 
         AND YEAR(r.created_at) = YEAR(CURRENT_DATE())
-    ")['total'] ?? 0;
+    ";
+    $stats['monthly_sales'] = fetchOne($monthly_sales_query)['total'] ?? 0;
     
     // Total de boletos vendidos
     $stats['total_tickets_sold'] = fetchOne("SELECT COALESCE(SUM(sold_tickets), 0) as total FROM raffles")['total'] ?? 0;
+    
+    // Revenue total
+    $revenue_query = "SELECT COALESCE(SUM(r.ticket_price * r.sold_tickets), 0) as total FROM raffles r";
+    $stats['total_revenue'] = fetchOne($revenue_query)['total'] ?? 0;
+    
+    // Comisiones totales
+    $commissions_query = "SELECT COALESCE(SUM(r.ticket_price * r.sold_tickets * (r.commission_rate / 100)), 0) as total FROM raffles r";
+    $stats['total_commissions'] = fetchOne($commissions_query)['total'] ?? 0;
     
 } catch (Exception $e) {
     error_log("Error al obtener estadísticas: " . $e->getMessage());
@@ -113,19 +131,23 @@ try {
                 </div>
             </div>
             
-            <!-- Estadísticas rápidas -->
+            <!-- Estadísticas rápidas actualizadas -->
             <div class="stats-row">
                 <div class="stat-card">
                     <div class="stat-number"><?php echo $stats['active_raffles']; ?></div>
                     <div class="stat-label">Rifas Activas</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-number"><?php echo number_format($stats['total_users']); ?></div>
-                    <div class="stat-label">Usuarios Registrados</div>
+                    <div class="stat-number">$<?php echo number_format($stats['total_revenue'], 0); ?></div>
+                    <div class="stat-label">Revenue Total</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-number">$<?php echo number_format($stats['monthly_sales'], 2); ?></div>
+                    <div class="stat-number">$<?php echo number_format($stats['monthly_sales'], 0); ?></div>
                     <div class="stat-label">Ventas del Mes</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">$<?php echo number_format($stats['total_commissions'], 0); ?></div>
+                    <div class="stat-label">Comisiones Totales</div>
                 </div>
             </div>
             
@@ -152,8 +174,9 @@ try {
                             <tr>
                                 <th>Rifa</th>
                                 <th>Fecha de Sorteo</th>
-                                <th>Precio del Boleto</th>
+                                <th>Precio & Comisión</th>
                                 <th>Progreso de Venta</th>
+                                <th>Revenue</th>
                                 <th>Estado</th>
                                 <th>Acciones</th>
                             </tr>
@@ -186,9 +209,15 @@ try {
                                 </td>
                                 <td>
                                     <div class="rifa-price">$<?php echo number_format($rifa['ticket_price'], 2); ?></div>
-                                    <?php if ($rifa['commission_rate'] > 0): ?>
-                                        <div style="font-size: 0.8rem; color: #6b7280;">
-                                            Comisión: <?php echo $rifa['commission_rate']; ?>%
+                                    <div style="font-size: 0.8rem; color: #6b7280;">
+                                        Comisión: <?php echo number_format($rifa['commission_rate'], 1); ?>%
+                                    </div>
+                                    <div style="font-size: 0.8rem; color: #059669; font-weight: 600;">
+                                        $<?php echo number_format($rifa['ticket_price'] * ($rifa['commission_rate'] / 100), 2); ?> por boleto
+                                    </div>
+                                    <?php if (strtotime($rifa['updated_at']) > strtotime('-1 hour')): ?>
+                                        <div style="font-size: 0.7rem; color: #f59e0b; font-weight: 600;">
+                                            🔄 Actualizado recientemente
                                         </div>
                                     <?php endif; ?>
                                 </td>
@@ -206,6 +235,17 @@ try {
                                                 ¡Agotada!
                                             </div>
                                         <?php endif; ?>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div style="font-weight: 600; color: #059669; font-size: 1rem;">
+                                        $<?php echo number_format($rifa['current_revenue'], 0); ?>
+                                    </div>
+                                    <div style="font-size: 0.8rem; color: #6b7280;">
+                                        de $<?php echo number_format($rifa['potential_revenue'], 0); ?>
+                                    </div>
+                                    <div style="font-size: 0.8rem; color: #f59e0b; font-weight: 600;">
+                                        Comisiones: $<?php echo number_format($rifa['total_commission'], 0); ?>
                                     </div>
                                 </td>
                                 <td>
@@ -357,25 +397,25 @@ try {
                     <div class="stat-card">
                         <div class="stat-header">
                             <div class="stat-icon icon-active">
-                                <i class="fas fa-check-circle"></i>
+                                <i class="fas fa-dollar-sign"></i>
                             </div>
                         </div>
-                        <div class="stat-number"><?php echo number_format($stats['total_tickets_sold']); ?></div>
-                        <div class="stat-label">Boletos Vendidos</div>
+                        <div class="stat-number">$<?php echo number_format($stats['total_revenue'], 0); ?></div>
+                        <div class="stat-label">Revenue Total</div>
                     </div>
                     
                     <div class="stat-card">
                         <div class="stat-header">
                             <div class="stat-icon icon-sales">
-                                <i class="fas fa-dollar-sign"></i>
+                                <i class="fas fa-percentage"></i>
                             </div>
                         </div>
-                        <div class="stat-number">$<?php echo number_format($stats['monthly_sales'], 2); ?></div>
-                        <div class="stat-label">Ventas del Mes</div>
+                        <div class="stat-number">$<?php echo number_format($stats['total_commissions'], 0); ?></div>
+                        <div class="stat-label">Comisiones Generadas</div>
                     </div>
                 </div>
                 
-                <!-- Tabla de rifas para committee (misma estructura pero con diferentes acciones) -->
+                <!-- Tabla de rifas para committee con información actualizada -->
                 <div class="rifas-table-container">
                     <div class="table-header">
                         <h2 class="table-title">Gestión de Rifas</h2>
@@ -385,15 +425,14 @@ try {
                         </button>
                     </div>
                     
-                    <!-- Tabla similar al admin pero con acciones limitadas -->
                     <?php if (!empty($rifas_data)): ?>
                     <table class="rifas-table">
                         <thead>
                             <tr>
                                 <th>Rifa</th>
-                                <th>Fecha de Sorteo</th>
-                                <th>Precio del Boleto</th>
+                                <th>Precio & Comisión</th>
                                 <th>Progreso de Venta</th>
+                                <th>Revenue</th>
                                 <th>Estado</th>
                                 <th>Acciones</th>
                             </tr>
@@ -404,13 +443,23 @@ try {
                             <tr>
                                 <td>
                                     <div class="rifa-name"><?php echo htmlspecialchars($rifa['name']); ?></div>
-                                    <div class="rifa-date">ID: #<?php echo $rifa['id']; ?></div>
-                                </td>
-                                <td>
-                                    <div class="rifa-date"><?php echo $rifa['formatted_date']; ?></div>
+                                    <div class="rifa-date">
+                                        ID: #<?php echo $rifa['id']; ?> • <?php echo $rifa['formatted_date']; ?>
+                                    </div>
                                 </td>
                                 <td>
                                     <div class="rifa-price">$<?php echo number_format($rifa['ticket_price'], 2); ?></div>
+                                    <div style="font-size: 0.8rem; color: #059669; font-weight: 600;">
+                                        <?php echo number_format($rifa['commission_rate'], 1); ?>% comisión
+                                    </div>
+                                    <div style="font-size: 0.8rem; color: #6b7280;">
+                                        $<?php echo number_format($rifa['ticket_price'] * ($rifa['commission_rate'] / 100), 2); ?> por venta
+                                    </div>
+                                    <?php if (strtotime($rifa['updated_at']) > strtotime('-1 hour')): ?>
+                                        <div style="font-size: 0.7rem; color: #f59e0b; font-weight: 600;">
+                                            ✨ Recién actualizado
+                                        </div>
+                                    <?php endif; ?>
                                 </td>
                                 <td>
                                     <div class="rifa-progress">
@@ -421,6 +470,14 @@ try {
                                         <div class="progress-bar">
                                             <div class="progress-fill" style="width: <?php echo $progress_percentage; ?>%"></div>
                                         </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div style="font-weight: 600; color: #059669;">
+                                        $<?php echo number_format($rifa['current_revenue'], 0); ?>
+                                    </div>
+                                    <div style="font-size: 0.8rem; color: #6b7280;">
+                                        de $<?php echo number_format($rifa['potential_revenue'], 0); ?>
                                     </div>
                                 </td>
                                 <td>
@@ -452,7 +509,8 @@ try {
                                         
                                         <button class="action-btn btn-settings" 
                                                 data-tooltip="Configuración"
-                                                onclick="window.location.href='settings_committee.php?rifa_id=<?php echo $rifa['id']; ?>'">
+                                                onclick="window.location.href='settings_committee.php?rifa_id=<?php echo $rifa['id']; ?>'"
+                                                style="background: #f59e0b; color: white; border-color: #f59e0b;">
                                             <i class="fas fa-cog"></i>
                                         </button>
                                     </div>
@@ -474,7 +532,7 @@ try {
     </div>
 
     <?php else: ?>
-    <!-- Vista Seller (similar estructura con datos reales) -->
+    <!-- Vista Seller con precios y comisiones actualizadas -->
     <div class="seller-panel">
         <div class="panel-container">
             <!-- Header Seller -->
@@ -539,7 +597,7 @@ try {
                     </div>
                 </div>
                 
-                <!-- Rifas Disponibles para Vender -->
+                <!-- Rifas Disponibles para Vender con precios actualizados -->
                 <div class="rifas-table-container">
                     <div class="table-header">
                         <h2 class="table-title">Rifas Disponibles</h2>
@@ -555,7 +613,7 @@ try {
                             <tr>
                                 <th>Rifa</th>
                                 <th>Precio del Boleto</th>
-                                <th>Comisión</th>
+                                <th>Tu Comisión</th>
                                 <th>Disponibles</th>
                                 <th>Mis Ventas</th>
                                 <th>Acciones</th>
@@ -572,12 +630,24 @@ try {
                                 <td>
                                     <div class="rifa-name"><?php echo htmlspecialchars($rifa['name']); ?></div>
                                     <div class="rifa-date">Sorteo: <?php echo $rifa['formatted_date']; ?></div>
+                                    <?php if (strtotime($rifa['updated_at']) > strtotime('-1 hour')): ?>
+                                        <div style="font-size: 0.7rem; color: #f59e0b; font-weight: 600;">
+                                            🔄 Precios actualizados
+                                        </div>
+                                    <?php endif; ?>
                                 </td>
                                 <td>
-                                    <div class="rifa-price">$<?php echo number_format($rifa['ticket_price'], 2); ?></div>
+                                    <div class="rifa-price" style="font-size: 1.2rem; font-weight: 700;">
+                                        $<?php echo number_format($rifa['ticket_price'], 2); ?>
+                                    </div>
                                 </td>
                                 <td>
-                                    <div class="commission-info">$<?php echo number_format($commission, 2); ?></div>
+                                    <div class="commission-info" style="font-size: 1.2rem; font-weight: 700;">
+                                        $<?php echo number_format($commission, 2); ?>
+                                    </div>
+                                    <div style="font-size: 0.8rem; color: #059669;">
+                                        <?php echo number_format($rifa['commission_rate'], 1); ?>% por boleto
+                                    </div>
                                 </td>
                                 <td>
                                     <div class="available-tickets"><?php echo number_format($available_tickets); ?></div>
@@ -651,20 +721,17 @@ try {
             const menu = document.getElementById('statusMenu-' + rifaId);
             const allMenus = document.querySelectorAll('.status-dropdown');
             
-            // Cerrar todos los otros menús
             allMenus.forEach(m => {
                 if (m !== menu) {
                     m.classList.remove('active');
                 }
             });
             
-            // Toggle el menú actual
             menu.classList.toggle('active');
         }
         
         function changeRifaStatus(rifaId, newStatus) {
             if (confirm(`¿Estás seguro de cambiar el estado de la rifa?`)) {
-                // Hacer petición AJAX para cambiar el estado
                 fetch('update_raffle_status.php', {
                     method: 'POST',
                     headers: {
@@ -687,7 +754,6 @@ try {
                     alert('Error de conexión: ' + error);
                 });
                 
-                // Cerrar el menú
                 document.getElementById('statusMenu-' + rifaId).classList.remove('active');
             }
         }
@@ -700,6 +766,45 @@ try {
         function viewMySales(rifaId) {
             window.location.href = 'my_sales.php?rifa_id=' + rifaId;
         }
+        
+        // Auto-refresh para mostrar cambios en tiempo real
+        <?php if ($current_admin['user_type'] === 'committee' || $current_admin['user_type'] === 'seller'): ?>
+        setInterval(function() {
+            // Verificar si hay cambios recientes en las rifas
+            fetch('check_raffle_updates.php')
+            .then(response => response.json())
+            .then(data => {
+                if (data.hasUpdates) {
+                    // Mostrar notificación de actualización
+                    const notification = document.createElement('div');
+                    notification.style.cssText = `
+                        position: fixed;
+                        top: 20px;
+                        right: 20px;
+                        background: linear-gradient(135deg, #f59e0b, #d97706);
+                        color: white;
+                        padding: 1rem;
+                        border-radius: 10px;
+                        box-shadow: 0 10px 30px rgba(245, 158, 11, 0.3);
+                        z-index: 10000;
+                        cursor: pointer;
+                        animation: slideIn 0.3s ease;
+                    `;
+                    notification.innerHTML = '🔄 Hay actualizaciones disponibles. <strong>Haz clic para recargar</strong>';
+                    notification.onclick = () => location.reload();
+                    
+                    document.body.appendChild(notification);
+                    
+                    setTimeout(() => {
+                        if (document.body.contains(notification)) {
+                            document.body.removeChild(notification);
+                        }
+                    }, 10000);
+                }
+            })
+            .catch(error => console.log('Error checking updates:', error));
+        }, 60000); // Verificar cada minuto
+        <?php endif; ?>
         
         // Cerrar menús al hacer clic fuera
         document.addEventListener('click', function(e) {

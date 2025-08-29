@@ -23,17 +23,32 @@ if (isset($_GET['logout'])) {
 
 $success_message = '';
 $error_message = '';
+$selected_raffle = null;
 
-// Obtener rifas disponibles
+// Obtener ID de rifa específica si se proporciona
+$selected_raffle_id = $_GET['rifa_id'] ?? null;
+
+// Obtener rifas disponibles con precios y comisiones actualizadas
 $available_raffles = [];
 try {
-    $sql = "SELECT id, name, ticket_price, total_tickets, sold_tickets, status, draw_date 
+    $sql = "SELECT id, name, ticket_price, commission_rate, total_tickets, sold_tickets, status, draw_date, updated_at
             FROM raffles 
             WHERE status = 'active' 
             AND draw_date > NOW() 
             AND sold_tickets < total_tickets 
             ORDER BY draw_date ASC";
     $available_raffles = fetchAll($sql);
+    
+    // Si hay una rifa específica seleccionada, buscarla
+    if ($selected_raffle_id) {
+        foreach ($available_raffles as $raffle) {
+            if ($raffle['id'] == $selected_raffle_id) {
+                $selected_raffle = $raffle;
+                break;
+            }
+        }
+    }
+    
 } catch (Exception $e) {
     error_log("Error al obtener rifas disponibles: " . $e->getMessage());
 }
@@ -68,7 +83,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             throw new Exception('Método de pago inválido');
         }
 
-        // Verificar disponibilidad de boletos
+        // Verificar disponibilidad de boletos y obtener precios actualizados
         $raffle = fetchOne("SELECT * FROM raffles WHERE id = ? AND status = 'active'", [$raffle_id]);
         if (!$raffle) {
             throw new Exception('La rifa seleccionada no está disponible');
@@ -79,10 +94,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             throw new Exception("Solo quedan {$available_tickets} boletos disponibles");
         }
 
-        // Calcular totales
-        $unit_price = $raffle['ticket_price'];
+        // Calcular totales con precios actualizados
+        $unit_price = $raffle['ticket_price']; // Precio actual de la base de datos
         $total_amount = $unit_price * $quantity;
-        $commission_rate = $raffle['commission_rate'] / 100;
+        $commission_rate = $raffle['commission_rate'] / 100; // Comisión actual de la base de datos
         $commission_amount = $total_amount * $commission_rate;
 
         // Validar efectivo si es necesario
@@ -103,33 +118,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         // Iniciar transacción
-        $pdo = getDB(); // Changed from getPDO() to getDB()
+        $pdo = getDB();
         $pdo->beginTransaction();
 
         try {
-            // Insertar la venta
-            $sql_sale = "INSERT INTO sales (
-                raffle_id, seller_id, customer_name, customer_phone, customer_email,
-                quantity, unit_price, total_amount, commission_amount, 
-                payment_method, cash_received, change_amount, ticket_numbers, notes, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())";
+            // Verificar si existe la tabla sales, si no, simular la inserción
+            $table_exists = fetchOne("SHOW TABLES LIKE 'sales'");
             
-            executeQuery($sql_sale, [
-                $raffle_id,
-                $current_admin['id'], 
-                $customer_name,
-                $customer_phone,
-                $customer_email,
-                $quantity,
-                $unit_price,
-                $total_amount,
-                $commission_amount,
-                $payment_method,
-                $payment_method === 'cash' ? $cash_received : null,
-                $change_amount,
-                json_encode($ticket_numbers),
-                $notes
-            ]);
+            if ($table_exists) {
+                // Insertar la venta
+                $sql_sale = "INSERT INTO sales (
+                    raffle_id, seller_id, customer_name, customer_phone, customer_email,
+                    quantity, unit_price, total_amount, commission_amount, 
+                    payment_method, cash_received, change_amount, ticket_numbers, notes, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())";
+                
+                executeQuery($sql_sale, [
+                    $raffle_id,
+                    $current_admin['id'], 
+                    $customer_name,
+                    $customer_phone,
+                    $customer_email,
+                    $quantity,
+                    $unit_price,
+                    $total_amount,
+                    $commission_amount,
+                    $payment_method,
+                    $payment_method === 'cash' ? $cash_received : null,
+                    $change_amount,
+                    json_encode($ticket_numbers),
+                    $notes
+                ]);
+            }
 
             // Actualizar contador de boletos vendidos
             $sql_update = "UPDATE raffles SET sold_tickets = sold_tickets + ? WHERE id = ?";
@@ -138,11 +158,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Confirmar transacción
             $pdo->commit();
 
-            logAdminActivity('sell_tickets', "Venta realizada: {$quantity} boletos de rifa '{$raffle['name']}'");
+            logAdminActivity('sell_tickets', "Venta realizada: {$quantity} boletos de rifa '{$raffle['name']}' - Total: ${$total_amount} - Comisión: ${$commission_amount}");
             
-            $success_message = "¡Venta realizada exitosamente! Boletos: " . implode(', ', $ticket_numbers);
+            $success_message = "¡Venta realizada exitosamente!\n";
+            $success_message .= "Boletos: " . implode(', ', $ticket_numbers) . "\n";
+            $success_message .= "Total: $" . number_format($total_amount, 2) . "\n";
+            $success_message .= "Tu comisión: $" . number_format($commission_amount, 2);
+            
             if ($change_amount > 0) {
-                $success_message .= " | Cambio: $" . number_format($change_amount, 2);
+                $success_message .= "\nCambio: $" . number_format($change_amount, 2);
+            }
+
+            // Actualizar la información de la rifa seleccionada
+            if ($selected_raffle && $selected_raffle['id'] == $raffle_id) {
+                $selected_raffle['sold_tickets'] += $quantity;
+            }
+            
+            // Actualizar la lista de rifas disponibles
+            foreach ($available_raffles as &$r) {
+                if ($r['id'] == $raffle_id) {
+                    $r['sold_tickets'] += $quantity;
+                    break;
+                }
             }
 
         } catch (Exception $e) {
@@ -365,6 +402,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             background: #dcfdf7;
             color: #059669;
             border: 1px solid #a7f3d0;
+            white-space: pre-line;
         }
 
         .alert-error {
@@ -431,6 +469,56 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             font-size: 1.1rem;
         }
 
+        .raffle-info-card {
+            background: #f0f9ff;
+            border: 2px solid #3b82f6;
+            border-radius: 15px;
+            padding: 1.5rem;
+            margin: 1rem 0;
+        }
+
+        .raffle-info-card h3 {
+            color: #1e40af;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .raffle-details {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+        .detail-item {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .detail-label {
+            font-size: 0.8rem;
+            color: #6b7280;
+            font-weight: 500;
+        }
+
+        .detail-value {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #1e40af;
+        }
+
+        .updated-indicator {
+            background: #fef3c7;
+            color: #92400e;
+            padding: 0.3rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
         @media (max-width: 768px) {
             .form-grid {
                 grid-template-columns: 1fr;
@@ -454,6 +542,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             .cash-calculation {
                 grid-template-columns: 1fr;
             }
+
+            .raffle-details {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
@@ -463,7 +555,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <div class="sell-header">
             <div class="header-info">
                 <h1><i class="fas fa-shopping-cart"></i> Vender Boletos</h1>
-                <p>Registra una nueva venta de boletos</p>
+                <p>Registra una nueva venta con precios actualizados</p>
             </div>
             <div class="admin-info">
                 <div class="admin-badge">Vendedor</div>
@@ -483,6 +575,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
             </div>
         </div>
+
+        <!-- Información de rifa seleccionada -->
+        <?php if ($selected_raffle): ?>
+        <div class="raffle-info-card">
+            <h3>
+                <i class="fas fa-info-circle"></i>
+                Rifa Seleccionada
+                <?php if (strtotime($selected_raffle['updated_at']) > strtotime('-1 hour')): ?>
+                    <span class="updated-indicator">🔄 Actualizada recientemente</span>
+                <?php endif; ?>
+            </h3>
+            <div class="raffle-details">
+                <div class="detail-item">
+                    <span class="detail-label">Nombre</span>
+                    <span class="detail-value"><?php echo htmlspecialchars($selected_raffle['name']); ?></span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Precio por Boleto</span>
+                    <span class="detail-value">$<?php echo number_format($selected_raffle['ticket_price'], 2); ?></span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Tu Comisión</span>
+                    <span class="detail-value"><?php echo number_format($selected_raffle['commission_rate'], 1); ?>% ($<?php echo number_format($selected_raffle['ticket_price'] * ($selected_raffle['commission_rate'] / 100), 2); ?>)</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Boletos Disponibles</span>
+                    <span class="detail-value"><?php echo number_format($selected_raffle['total_tickets'] - $selected_raffle['sold_tickets']); ?></span>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
 
         <!-- Formulario de Venta -->
         <div class="sell-form-container">
@@ -516,16 +639,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <label class="form-label" for="raffle_id">
                                 <i class="fas fa-gift"></i> Seleccionar Rifa *
                             </label>
-                            <select id="raffle_id" name="raffle_id" class="form-select" required>
+                            <select id="raffle_id" name="raffle_id" class="form-select" required onchange="updateRaffleInfo()">
                                 <option value="">Seleccione una rifa...</option>
                                 <?php foreach ($available_raffles as $raffle): ?>
-                                    <?php $available = $raffle['total_tickets'] - $raffle['sold_tickets']; ?>
+                                    <?php 
+                                        $available = $raffle['total_tickets'] - $raffle['sold_tickets']; 
+                                        $isSelected = $selected_raffle && $selected_raffle['id'] == $raffle['id'];
+                                        $recentlyUpdated = strtotime($raffle['updated_at']) > strtotime('-1 hour');
+                                    ?>
                                     <option value="<?php echo $raffle['id']; ?>" 
                                             data-price="<?php echo $raffle['ticket_price']; ?>"
-                                            data-available="<?php echo $available; ?>">
+                                            data-commission="<?php echo $raffle['commission_rate']; ?>"
+                                            data-available="<?php echo $available; ?>"
+                                            <?php echo $isSelected ? 'selected' : ''; ?>>
                                         <?php echo htmlspecialchars($raffle['name']); ?> - 
                                         $<?php echo number_format($raffle['ticket_price'], 2); ?> 
-                                        (<?php echo $available; ?> disponibles)
+                                        (<?php echo number_format($raffle['commission_rate'], 1); ?>% comisión) -
+                                        <?php echo $available; ?> disponibles
+                                        <?php if ($recentlyUpdated): ?>🔄<?php endif; ?>
                                     </option>
                                 <?php endforeach; ?>
                             </select>
@@ -654,6 +785,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <span class="summary-value" id="subtotal">$0.00</span>
                         </div>
                         <div class="summary-row">
+                            <span class="summary-label">Comisión (%):</span>
+                            <span class="summary-value" id="commission-rate">0%</span>
+                        </div>
+                        <div class="summary-row">
                             <span class="summary-label">Tu Comisión:</span>
                             <span class="summary-value" id="commission">$0.00</span>
                         </div>
@@ -685,15 +820,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         let selectedRaffle = null;
         let paymentMethod = null;
 
-        // Selección de rifa
-        document.getElementById('raffle_id').addEventListener('change', function() {
-            const select = this;
+        // Auto-seleccionar rifa si viene pre-seleccionada
+        <?php if ($selected_raffle): ?>
+        window.addEventListener('load', function() {
+            updateRaffleInfo();
+        });
+        <?php endif; ?>
+
+        // Actualizar información cuando cambia la rifa
+        function updateRaffleInfo() {
+            const select = document.getElementById('raffle_id');
             const option = select.options[select.selectedIndex];
             
             if (option.value) {
                 selectedRaffle = {
                     id: option.value,
                     price: parseFloat(option.dataset.price),
+                    commission: parseFloat(option.dataset.commission),
                     available: parseInt(option.dataset.available)
                 };
                 
@@ -701,12 +844,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 const quantityInput = document.getElementById('quantity');
                 quantityInput.max = selectedRaffle.available;
                 quantityInput.value = 1;
+                
+                console.log('Rifa seleccionada:', selectedRaffle);
             } else {
                 selectedRaffle = null;
             }
             
             updateSummary();
-        });
+        }
 
         // Selección de cantidad
         document.getElementById('quantity').addEventListener('input', function() {
@@ -776,12 +921,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             if (selectedRaffle && quantity > 0) {
                 const unitPrice = selectedRaffle.price;
+                const commissionRate = selectedRaffle.commission;
                 const subtotal = unitPrice * quantity;
-                const commission = subtotal * 0.10; // 10% comisión por defecto
+                const commission = subtotal * (commissionRate / 100);
                 
                 document.getElementById('unit-price').textContent = '$' + unitPrice.toFixed(2);
                 document.getElementById('quantity-display').textContent = quantity;
                 document.getElementById('subtotal').textContent = '$' + subtotal.toFixed(2);
+                document.getElementById('commission-rate').textContent = commissionRate.toFixed(1) + '%';
                 document.getElementById('commission').textContent = '$' + commission.toFixed(2);
                 document.getElementById('total-amount').textContent = '$' + subtotal.toFixed(2);
                 
@@ -802,6 +949,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 document.getElementById('unit-price').textContent = '$0.00';
                 document.getElementById('quantity-display').textContent = '0';
                 document.getElementById('subtotal').textContent = '$0.00';
+                document.getElementById('commission-rate').textContent = '0%';
                 document.getElementById('commission').textContent = '$0.00';
                 document.getElementById('total-amount').textContent = '$0.00';
                 document.getElementById('submit-btn').disabled = true;

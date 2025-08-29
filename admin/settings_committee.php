@@ -20,33 +20,76 @@ if (!$rifa_id) {
     exit();
 }
 
-// Datos de ejemplo para la rifa (en producción vendría de la base de datos)
-$rifa_info = [
-    'id' => $rifa_id,
-    'name' => 'iPhone 15 Pro Max',
-    'draw_date' => '2025-02-15',
-    'ticket_price' => 50.00,
-    'total_tickets' => 1000,
-    'sold_tickets' => 680,
-    'status' => 'active',
-    'commission_rate' => 10.00,
-    'auto_draw' => true,
-    'notifications_enabled' => true,
-    'allow_partial_sales' => false,
-    'max_tickets_per_user' => 50
-];
+$success_message = '';
+$error_message = '';
 
-// Configuraciones disponibles para el committee
-$committee_permissions = [
-    'change_status' => true,
-    'modify_commission' => true,
-    'manage_notifications' => true,
-    'view_reports' => true,
-    'manage_sellers' => true,
-    'modify_draw_date' => false, // Solo admin
-    'change_prize' => false, // Solo admin
-    'delete_raffle' => false // Solo admin
-];
+// Obtener información real de la rifa desde la base de datos
+try {
+    $sql = "SELECT * FROM raffles WHERE id = ?";
+    $rifa_info = fetchOne($sql, [$rifa_id]);
+    
+    if (!$rifa_info) {
+        header('Location: panel.php');
+        exit();
+    }
+} catch (Exception $e) {
+    error_log("Error al obtener información de la rifa: " . $e->getMessage());
+    header('Location: panel.php');
+    exit();
+}
+
+// Procesar formulario de actualización
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_settings'])) {
+    try {
+        $ticket_price = floatval($_POST['ticket_price'] ?? 0);
+        $commission_rate = floatval($_POST['commission_rate'] ?? 0);
+        $status = $_POST['raffle_status'] ?? 'active';
+        $auto_draw = isset($_POST['auto_draw']) ? 1 : 0;
+        $allow_partial_sales = isset($_POST['allow_partial_sales']) ? 1 : 0;
+        $max_tickets_per_user = intval($_POST['max_tickets_per_user'] ?? 50);
+        
+        // Validaciones
+        if ($ticket_price <= 0) {
+            throw new Exception('El precio del boleto debe ser mayor a 0');
+        }
+        
+        if ($commission_rate < 0 || $commission_rate > 50) {
+            throw new Exception('La comisión debe estar entre 0% y 50%');
+        }
+        
+        if ($max_tickets_per_user < 1 || $max_tickets_per_user > 1000) {
+            throw new Exception('El máximo de boletos por usuario debe estar entre 1 y 1000');
+        }
+        
+        // Actualizar la base de datos
+        $update_sql = "UPDATE raffles SET 
+                        ticket_price = ?, 
+                        commission_rate = ?, 
+                        status = ?, 
+                        updated_at = NOW() 
+                       WHERE id = ?";
+        
+        executeQuery($update_sql, [
+            $ticket_price,
+            $commission_rate,
+            $status,
+            $rifa_id
+        ]);
+        
+        // Actualizar la información local para mostrar los cambios
+        $rifa_info['ticket_price'] = $ticket_price;
+        $rifa_info['commission_rate'] = $commission_rate;
+        $rifa_info['status'] = $status;
+        
+        logAdminActivity('update_raffle_settings', "Actualizó configuración de rifa: {$rifa_info['name']} - Precio: $ticket_price, Comisión: {$commission_rate}%");
+        
+        $success_message = 'Configuración actualizada correctamente';
+        
+    } catch (Exception $e) {
+        $error_message = $e->getMessage();
+        error_log("Error al actualizar configuración: " . $e->getMessage());
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -200,14 +243,6 @@ $committee_permissions = [
         
         .icon-sales {
             background: linear-gradient(135deg, #10b981, #059669);
-        }
-        
-        .icon-notifications {
-            background: linear-gradient(135deg, #f59e0b, #d97706);
-        }
-        
-        .icon-advanced {
-            background: linear-gradient(135deg, #8b5cf6, #7c3aed);
         }
         
         .section-title {
@@ -379,16 +414,6 @@ $committee_permissions = [
             border-color: #cbd5e1;
         }
         
-        .btn-danger {
-            background: linear-gradient(135deg, #ef4444, #dc2626);
-            color: white;
-        }
-        
-        .btn-danger:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(239, 68, 68, 0.4);
-        }
-        
         .button-group {
             display: flex;
             gap: 1rem;
@@ -433,22 +458,59 @@ $committee_permissions = [
             gap: 0.8rem;
         }
         
-        .alert-info {
-            background: #dbeafe;
-            color: #1e40af;
-            border: 1px solid #bfdbfe;
+        .alert-success {
+            background: #dcfdf7;
+            color: #059669;
+            border: 1px solid #a7f3d0;
         }
         
-        .alert-warning {
-            background: #fef3c7;
-            color: #92400e;
-            border: 1px solid #fde68a;
+        .alert-error {
+            background: #fef2f2;
+            color: #dc2626;
+            border: 1px solid #fecaca;
         }
         
         .alert-icon {
             width: 20px;
             height: 20px;
             flex-shrink: 0;
+        }
+        
+        /* Price/Commission Highlighting */
+        .price-highlight {
+            background: #eff6ff;
+            border: 2px solid #3b82f6;
+            border-radius: 8px;
+            padding: 1rem;
+            margin: 1rem 0;
+        }
+        
+        .price-highlight h4 {
+            color: #1e40af;
+            margin-bottom: 0.5rem;
+        }
+        
+        .price-highlight p {
+            color: #1e40af;
+            margin: 0;
+        }
+        
+        .commission-highlight {
+            background: #f0fdf4;
+            border: 2px solid #10b981;
+            border-radius: 8px;
+            padding: 1rem;
+            margin: 1rem 0;
+        }
+        
+        .commission-highlight h4 {
+            color: #059669;
+            margin-bottom: 0.5rem;
+        }
+        
+        .commission-highlight p {
+            color: #059669;
+            margin: 0;
         }
         
         /* Responsive */
@@ -525,14 +587,38 @@ $committee_permissions = [
                 <div class="rifa-details">
                     <span>ID: #<?php echo $rifa_info['id']; ?></span>
                     <span>Estado: <span class="status-badge status-<?php echo $rifa_info['status']; ?>"><?php echo ucfirst($rifa_info['status']); ?></span></span>
-                    <span>Precio: $<?php echo number_format($rifa_info['ticket_price'], 2); ?></span>
-                    <span>Sorteo: <?php echo date('d/m/Y', strtotime($rifa_info['draw_date'])); ?></span>
+                    <span>Precio Actual: $<?php echo number_format($rifa_info['ticket_price'], 2); ?></span>
+                    <span>Comisión Actual: <?php echo number_format($rifa_info['commission_rate'], 1); ?>%</span>
+                    <span>Sorteo: <?php echo date('d/m/Y H:i', strtotime($rifa_info['draw_date'])); ?></span>
                 </div>
             </div>
         </div>
         
         <div class="content">
-            <form id="settingsForm" onsubmit="saveSettings(event)">
+            <?php if ($success_message): ?>
+                <div class="alert alert-success">
+                    <svg class="alert-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                        <polyline points="22,4 12,14.01 9,11.01"/>
+                    </svg>
+                    <span><?php echo htmlspecialchars($success_message); ?></span>
+                </div>
+            <?php endif; ?>
+
+            <?php if ($error_message): ?>
+                <div class="alert alert-error">
+                    <svg class="alert-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M15 9l-6 6"/>
+                        <path d="M9 9l6 6"/>
+                    </svg>
+                    <span><?php echo htmlspecialchars($error_message); ?></span>
+                </div>
+            <?php endif; ?>
+
+            <form id="settingsForm" method="POST">
+                <input type="hidden" name="update_settings" value="1">
+                
                 <div class="settings-layout">
                     <!-- Configuración General -->
                     <div class="settings-section">
@@ -571,7 +657,7 @@ $committee_permissions = [
                                 </div>
                                 <div class="setting-control">
                                     <label class="toggle-switch">
-                                        <input type="checkbox" name="auto_draw" <?php echo $rifa_info['auto_draw'] ? 'checked' : ''; ?>>
+                                        <input type="checkbox" name="auto_draw" checked>
                                         <span class="slider"></span>
                                     </label>
                                 </div>
@@ -584,7 +670,7 @@ $committee_permissions = [
                                 </div>
                                 <div class="setting-control">
                                     <label class="toggle-switch">
-                                        <input type="checkbox" name="allow_partial_sales" <?php echo $rifa_info['allow_partial_sales'] ? 'checked' : ''; ?>>
+                                        <input type="checkbox" name="allow_partial_sales">
                                         <span class="slider"></span>
                                     </label>
                                 </div>
@@ -593,7 +679,7 @@ $committee_permissions = [
                             <div class="form-group">
                                 <label class="form-label">Máximo de Boletos por Usuario</label>
                                 <div class="input-group">
-                                    <input type="number" name="max_tickets_per_user" class="form-input" style="width: 120px;" value="<?php echo $rifa_info['max_tickets_per_user']; ?>" min="1" max="1000">
+                                    <input type="number" name="max_tickets_per_user" class="form-input" style="width: 120px;" value="50" min="1" max="1000">
                                     <span class="input-addon">boletos</span>
                                 </div>
                             </div>
@@ -611,29 +697,44 @@ $committee_permissions = [
                             </div>
                             <div>
                                 <h2 class="section-title">Configuración de Ventas</h2>
-                                <p class="section-description">Comisiones y configuración de vendedores</p>
+                                <p class="section-description">Precios y comisiones</p>
                             </div>
                         </div>
                         
                         <div class="section-content">
-                            <?php if ($committee_permissions['modify_commission']): ?>
+                            <div class="price-highlight">
+                                <h4>💰 Precio del Boleto</h4>
+                                <p>Precio actual: $<?php echo number_format($rifa_info['ticket_price'], 2); ?></p>
+                            </div>
+                            
                             <div class="form-group">
-                                <label class="form-label">Comisión de Vendedores</label>
+                                <label class="form-label">Nuevo Precio del Boleto</label>
                                 <div class="input-group">
-                                    <input type="number" name="commission_rate" class="form-input" style="width: 100px;" value="<?php echo $rifa_info['commission_rate']; ?>" min="0" max="50" step="0.1">
+                                    <span class="input-addon">$</span>
+                                    <input type="number" name="ticket_price" class="form-input" style="width: 120px;" 
+                                           value="<?php echo $rifa_info['ticket_price']; ?>" min="0.01" step="0.01" required>
+                                </div>
+                                <small style="color: #64748b; font-size: 0.8rem;">
+                                    Este cambio se reflejará inmediatamente en todo el sistema
+                                </small>
+                            </div>
+
+                            <div class="commission-highlight">
+                                <h4>📊 Comisión de Vendedores</h4>
+                                <p>Comisión actual: <?php echo number_format($rifa_info['commission_rate'], 1); ?>%</p>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="form-label">Nueva Comisión de Vendedores</label>
+                                <div class="input-group">
+                                    <input type="number" name="commission_rate" class="form-input" style="width: 100px;" 
+                                           value="<?php echo $rifa_info['commission_rate']; ?>" min="0" max="50" step="0.1" required>
                                     <span class="input-addon">%</span>
                                 </div>
+                                <small style="color: #64748b; font-size: 0.8rem;">
+                                    Entre 0% y 50%. Los vendedores verán este cambio inmediatamente
+                                </small>
                             </div>
-                            <?php else: ?>
-                            <div class="alert alert-info">
-                                <svg class="alert-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <circle cx="12" cy="12" r="10"/>
-                                    <path d="M12 16v-4"/>
-                                    <path d="M12 8h.01"/>
-                                </svg>
-                                <span>La modificación de comisiones requiere permisos de administrador.</span>
-                            </div>
-                            <?php endif; ?>
                             
                             <div class="setting-item">
                                 <div class="setting-info">
@@ -659,125 +760,6 @@ $committee_permissions = [
                                         <span class="slider"></span>
                                     </label>
                                 </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Configuración de Notificaciones -->
-                    <div class="settings-section">
-                        <div class="section-header">
-                            <div class="section-icon icon-notifications">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
-                                    <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
-                                </svg>
-                            </div>
-                            <div>
-                                <h2 class="section-title">Notificaciones</h2>
-                                <p class="section-description">Configurar alertas y notificaciones</p>
-                            </div>
-                        </div>
-                        
-                        <div class="section-content">
-                            <div class="setting-item">
-                                <div class="setting-info">
-                                    <div class="setting-label">Notificaciones por Email</div>
-                                    <div class="setting-description">Recibir alertas importantes por correo electrónico</div>
-                                </div>
-                                <div class="setting-control">
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" name="email_notifications" <?php echo $rifa_info['notifications_enabled'] ? 'checked' : ''; ?>>
-                                        <span class="slider"></span>
-                                    </label>
-                                </div>
-                            </div>
-                            
-                            <div class="setting-item">
-                                <div class="setting-info">
-                                    <div class="setting-label">Notificaciones Push</div>
-                                    <div class="setting-description">Alertas en tiempo real en el navegador</div>
-                                </div>
-                                <div class="setting-control">
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" name="push_notifications">
-                                        <span class="slider"></span>
-                                    </label>
-                                </div>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label class="form-label">Frecuencia de Reportes</label>
-                                <select name="report_frequency" class="form-select">
-                                    <option value="daily">Diario</option>
-                                    <option value="weekly" selected>Semanal</option>
-                                    <option value="monthly">Mensual</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Configuración Avanzada -->
-                    <div class="settings-section">
-                        <div class="section-header">
-                            <div class="section-icon icon-advanced">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
-                                </svg>
-                            </div>
-                            <div>
-                                <h2 class="section-title">Configuración Avanzada</h2>
-                                <p class="section-description">Opciones adicionales y herramientas</p>
-                            </div>
-                        </div>
-                        
-                        <div class="section-content">
-                            <div class="alert alert-warning">
-                                <svg class="alert-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
-                                </svg>
-                                <span>Estas configuraciones pueden afectar el funcionamiento de la rifa. Úsalas con precaución.</span>
-                            </div>
-                            
-                            <div class="setting-item">
-                                <div class="setting-info">
-                                    <div class="setting-label">Modo de Depuración</div>
-                                    <div class="setting-description">Activar logs detallados para diagnóstico</div>
-                                </div>
-                                <div class="setting-control">
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" name="debug_mode">
-                                        <span class="slider"></span>
-                                    </label>
-                                </div>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label class="form-label">Zona Horaria</label>
-                                <select name="timezone" class="form-select">
-                                    <option value="America/Mexico_City" selected>México (GMT-6)</option>
-                                    <option value="America/New_York">Estados Unidos Este (GMT-5)</option>
-                                    <option value="America/Los_Angeles">Estados Unidos Oeste (GMT-8)</option>
-                                    <option value="Europe/Madrid">España (GMT+1)</option>
-                                </select>
-                            </div>
-                            
-                            <div class="button-group">
-                                <button type="button" class="btn btn-secondary" onclick="exportData()">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                                        <polyline points="7,10 12,15 17,10"/>
-                                        <line x1="12" y1="15" x2="12" y2="3"/>
-                                    </svg>
-                                    Exportar Datos
-                                </button>
-                                
-                                <button type="button" class="btn btn-danger" onclick="confirmReset()">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <polyline points="1,4 1,10 7,10"/>
-                                        <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
-                                    </svg>
-                                    Reiniciar Configuración
-                                </button>
                             </div>
                         </div>
                     </div>
@@ -807,37 +789,46 @@ $committee_permissions = [
     </div>
     
     <script>
-        function saveSettings(event) {
-            event.preventDefault();
+        // Preview de cambios
+        function previewPriceChange() {
+            const newPrice = document.querySelector('input[name="ticket_price"]').value;
+            const commission = document.querySelector('input[name="commission_rate"]').value;
             
-            // Mostrar loading
-            const submitBtn = event.target.querySelector('button[type="submit"]');
-            const originalText = submitBtn.innerHTML;
-            submitBtn.innerHTML = '<div style="display: flex; align-items: center; gap: 0.5rem;"><div style="width: 16px; height: 16px; border: 2px solid #fff; border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>Guardando...</div>';
-            submitBtn.disabled = true;
+            if (newPrice && commission) {
+                const commissionAmount = (newPrice * commission / 100).toFixed(2);
+                console.log(`Nuevo precio: $${newPrice}, Comisión: ${commission}% ($${commissionAmount})`);
+            }
+        }
+        
+        // Actualizar preview en tiempo real
+        document.querySelector('input[name="ticket_price"]').addEventListener('input', previewPriceChange);
+        document.querySelector('input[name="commission_rate"]').addEventListener('input', previewPriceChange);
+        
+        // Confirmar cambios importantes
+        document.getElementById('settingsForm').addEventListener('submit', function(e) {
+            const currentPrice = <?php echo $rifa_info['ticket_price']; ?>;
+            const currentCommission = <?php echo $rifa_info['commission_rate']; ?>;
+            const newPrice = parseFloat(document.querySelector('input[name="ticket_price"]').value);
+            const newCommission = parseFloat(document.querySelector('input[name="commission_rate"]').value);
             
-            // Simular guardado (aquí harías la petición AJAX real)
-            setTimeout(() => {
-                submitBtn.innerHTML = originalText;
-                submitBtn.disabled = false;
+            let changes = [];
+            if (newPrice !== currentPrice) {
+                changes.push(`Precio: $${currentPrice} → $${newPrice}`);
+            }
+            if (newCommission !== currentCommission) {
+                changes.push(`Comisión: ${currentCommission}% → ${newCommission}%`);
+            }
+            
+            if (changes.length > 0) {
+                const confirm = window.confirm(
+                    `¿Estás seguro de realizar estos cambios?\n\n${changes.join('\n')}\n\nEstos cambios se aplicarán inmediatamente en todo el sistema.`
+                );
                 
-                // Mostrar mensaje de éxito
-                showSuccessMessage('Configuración guardada correctamente');
-            }, 2000);
-        }
-        
-        function exportData() {
-            if (confirm('¿Deseas exportar todos los datos de esta rifa?')) {
-                alert('Función de exportación - Por implementar\n\nSe descargaría un archivo CSV con todos los datos.');
+                if (!confirm) {
+                    e.preventDefault();
+                }
             }
-        }
-        
-        function confirmReset() {
-            if (confirm('⚠️ ¿Estás seguro de que quieres reiniciar toda la configuración?\n\nEsta acción NO se puede deshacer.')) {
-                alert('Configuración reiniciada a valores por defecto');
-                location.reload();
-            }
-        }
+        });
         
         function showSuccessMessage(message) {
             const messageEl = document.createElement('div');
@@ -877,11 +868,6 @@ $committee_permissions = [
             @keyframes slideOut {
                 from { transform: translateX(0); opacity: 1; }
                 to { transform: translateX(100%); opacity: 0; }
-            }
-            
-            @keyframes spin {
-                0% { transform: rotate(0deg); }
-                100% { transform: rotate(360deg); }
             }
         `;
         document.head.appendChild(style);
