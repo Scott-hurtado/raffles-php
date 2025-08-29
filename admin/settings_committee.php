@@ -60,30 +60,79 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_settings'])) {
         if ($max_tickets_per_user < 1 || $max_tickets_per_user > 1000) {
             throw new Exception('El máximo de boletos por usuario debe estar entre 1 y 1000');
         }
-        
-        // Actualizar la base de datos
-        $update_sql = "UPDATE raffles SET 
-                        ticket_price = ?, 
-                        commission_rate = ?, 
-                        status = ?, 
-                        updated_at = NOW() 
-                       WHERE id = ?";
-        
-        executeQuery($update_sql, [
-            $ticket_price,
-            $commission_rate,
-            $status,
-            $rifa_id
-        ]);
-        
-        // Actualizar la información local para mostrar los cambios
-        $rifa_info['ticket_price'] = $ticket_price;
-        $rifa_info['commission_rate'] = $commission_rate;
-        $rifa_info['status'] = $status;
-        
-        logAdminActivity('update_raffle_settings', "Actualizó configuración de rifa: {$rifa_info['name']} - Precio: $ticket_price, Comisión: {$commission_rate}%");
-        
-        $success_message = 'Configuración actualizada correctamente';
+
+        // Iniciar transacción
+        $pdo = getDB();
+        $pdo->beginTransaction();
+
+        try {
+            // Actualizar tabla raffles
+            $update_sql = "UPDATE raffles SET 
+                            ticket_price = ?, 
+                            commission_rate = ?, 
+                            status = ?, 
+                            updated_at = NOW() 
+                           WHERE id = ?";
+            
+            executeQuery($update_sql, [
+                $ticket_price,
+                $commission_rate,
+                $status,
+                $rifa_id
+            ]);
+
+            // Verificar si ya existe un registro en raffle_committee para esta rifa y comité
+            $committee_check = fetchOne(
+                "SELECT id FROM raffle_committee WHERE raffle_id = ? AND committee_id = ? AND is_active = 1",
+                [$rifa_id, $current_admin['id']]
+            );
+
+            if ($committee_check) {
+                // Actualizar registro existente
+                $update_committee_sql = "UPDATE raffle_committee SET 
+                                        ticket_price = ?, 
+                                        commission_rate = ?, 
+                                        original_price = ?, 
+                                        updated_at = NOW() 
+                                        WHERE id = ?";
+                
+                executeQuery($update_committee_sql, [
+                    $ticket_price,
+                    $commission_rate,
+                    $rifa_info['ticket_price'], // Guardar el precio original antes del cambio
+                    $committee_check['id']
+                ]);
+            } else {
+                // Crear nuevo registro en raffle_committee
+                $insert_committee_sql = "INSERT INTO raffle_committee 
+                                        (raffle_id, committee_id, ticket_price, commission_rate, original_price, is_active, created_at, updated_at) 
+                                        VALUES (?, ?, ?, ?, ?, 1, NOW(), NOW())";
+                
+                executeQuery($insert_committee_sql, [
+                    $rifa_id,
+                    $current_admin['id'],
+                    $ticket_price,
+                    $commission_rate,
+                    $rifa_info['ticket_price'] // Precio original
+                ]);
+            }
+
+            // Confirmar transacción
+            $pdo->commit();
+
+            // Actualizar la información local para mostrar los cambios
+            $rifa_info['ticket_price'] = $ticket_price;
+            $rifa_info['commission_rate'] = $commission_rate;
+            $rifa_info['status'] = $status;
+            
+            logAdminActivity('update_raffle_settings', "Actualizó configuración de rifa: {$rifa_info['name']} - Precio: $ticket_price, Comisión: {$commission_rate}%");
+            
+            $success_message = 'Configuración actualizada correctamente';
+
+        } catch (Exception $e) {
+            $pdo->rollback();
+            throw $e;
+        }
         
     } catch (Exception $e) {
         $error_message = $e->getMessage();
@@ -513,6 +562,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_settings'])) {
             margin: 0;
         }
         
+        /* Update Notice */
+        .update-notice {
+            background: linear-gradient(135deg, #fbbf24, #f59e0b);
+            color: white;
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+            font-weight: 600;
+            text-align: center;
+        }
+        
         /* Responsive */
         @media (max-width: 1024px) {
             .settings-layout {
@@ -616,6 +676,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_settings'])) {
                 </div>
             <?php endif; ?>
 
+            <div class="update-notice">
+                🔄 Los cambios se guardarán en la tabla raffle_committee para el seguimiento del comité
+            </div>
+
             <form id="settingsForm" method="POST">
                 <input type="hidden" name="update_settings" value="1">
                 
@@ -715,7 +779,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_settings'])) {
                                            value="<?php echo $rifa_info['ticket_price']; ?>" min="0.01" step="0.01" required>
                                 </div>
                                 <small style="color: #64748b; font-size: 0.8rem;">
-                                    Este cambio se reflejará inmediatamente en todo el sistema
+                                    Este cambio se reflejará inmediatamente en todo el sistema y se guardará en raffle_committee
                                 </small>
                             </div>
 
@@ -821,7 +885,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_settings'])) {
             
             if (changes.length > 0) {
                 const confirm = window.confirm(
-                    `¿Estás seguro de realizar estos cambios?\n\n${changes.join('\n')}\n\nEstos cambios se aplicarán inmediatamente en todo el sistema.`
+                    `¿Estás seguro de realizar estos cambios?\n\n${changes.join('\n')}\n\nEstos cambios se aplicarán inmediatamente y se guardarán en raffle_committee.`
                 );
                 
                 if (!confirm) {
@@ -829,48 +893,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_settings'])) {
                 }
             }
         });
-        
-        function showSuccessMessage(message) {
-            const messageEl = document.createElement('div');
-            messageEl.style.cssText = `
-                position: fixed;
-                top: 20px;
-                right: 20px;
-                background: linear-gradient(135deg, #10b981, #059669);
-                color: white;
-                padding: 1rem 1.5rem;
-                border-radius: 10px;
-                box-shadow: 0 10px 30px rgba(16, 185, 129, 0.3);
-                z-index: 10000;
-                font-weight: 600;
-                animation: slideIn 0.3s ease;
-            `;
-            messageEl.textContent = message;
-            
-            document.body.appendChild(messageEl);
-            
-            setTimeout(() => {
-                messageEl.style.animation = 'slideOut 0.3s ease forwards';
-                setTimeout(() => {
-                    document.body.removeChild(messageEl);
-                }, 300);
-            }, 3000);
-        }
-        
-        // Añadir estilos para animaciones
-        const style = document.createElement('style');
-        style.textContent = `
-            @keyframes slideIn {
-                from { transform: translateX(100%); opacity: 0; }
-                to { transform: translateX(0); opacity: 1; }
-            }
-            
-            @keyframes slideOut {
-                from { transform: translateX(0); opacity: 1; }
-                to { transform: translateX(100%); opacity: 0; }
-            }
-        `;
-        document.head.appendChild(style);
     </script>
 </body>
 </html>

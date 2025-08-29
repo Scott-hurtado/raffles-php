@@ -31,12 +31,14 @@ $selected_raffle_id = $_GET['rifa_id'] ?? null;
 // Obtener rifas disponibles con precios y comisiones actualizadas
 $available_raffles = [];
 try {
-    $sql = "SELECT id, name, ticket_price, commission_rate, total_tickets, sold_tickets, status, draw_date, updated_at
-            FROM raffles 
-            WHERE status = 'active' 
-            AND draw_date > NOW() 
-            AND sold_tickets < total_tickets 
-            ORDER BY draw_date ASC";
+    $sql = "SELECT 
+                r.id, r.name, r.ticket_price, r.commission_rate, r.total_tickets, 
+                COALESCE(r.sold_tickets, 0) as sold_tickets, 
+                r.status, r.draw_date, r.updated_at
+            FROM raffles r 
+            WHERE r.status = 'active' 
+            AND r.draw_date > NOW() 
+            ORDER BY r.draw_date ASC";
     $available_raffles = fetchAll($sql);
     
     // Si hay una rifa específica seleccionada, buscarla
@@ -79,7 +81,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($quantity <= 0) {
             throw new Exception('La cantidad debe ser mayor a 0');
         }
-        if (!in_array($payment_method, ['cash', 'transfer'])) {
+        if (!in_array($payment_method, ['cash', 'transfer', 'card'])) {
             throw new Exception('Método de pago inválido');
         }
 
@@ -97,8 +99,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Calcular totales con precios actualizados
         $unit_price = $raffle['ticket_price']; // Precio actual de la base de datos
         $total_amount = $unit_price * $quantity;
-        $commission_rate = $raffle['commission_rate'] / 100; // Comisión actual de la base de datos
-        $commission_amount = $total_amount * $commission_rate;
+        $commission_rate = $raffle['commission_rate']; // Comisión actual de la base de datos
+        $commission_amount = $total_amount * ($commission_rate / 100);
 
         // Validar efectivo si es necesario
         $change_amount = 0;
@@ -122,45 +124,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $pdo->beginTransaction();
 
         try {
-            // Verificar si existe la tabla sales, si no, simular la inserción
-            $table_exists = fetchOne("SHOW TABLES LIKE 'sales'");
+            // Insertar la venta en la tabla sells
+            $sql_sale = "INSERT INTO sells (
+                raffle_id, seller_id, customer_name, customer_phone, customer_email,
+                quantity, unit_price, total_amount, commission_rate, commission_amount, 
+                payment_method, cash_received, change_amount, ticket_numbers, notes, 
+                status, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed', NOW())";
             
-            if ($table_exists) {
-                // Insertar la venta
-                $sql_sale = "INSERT INTO sales (
-                    raffle_id, seller_id, customer_name, customer_phone, customer_email,
-                    quantity, unit_price, total_amount, commission_amount, 
-                    payment_method, cash_received, change_amount, ticket_numbers, notes, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())";
-                
-                executeQuery($sql_sale, [
-                    $raffle_id,
-                    $current_admin['id'], 
-                    $customer_name,
-                    $customer_phone,
-                    $customer_email,
-                    $quantity,
-                    $unit_price,
-                    $total_amount,
-                    $commission_amount,
-                    $payment_method,
-                    $payment_method === 'cash' ? $cash_received : null,
-                    $change_amount,
-                    json_encode($ticket_numbers),
-                    $notes
-                ]);
-            }
+            $sale_id = executeQuery($sql_sale, [
+                $raffle_id,
+                $current_admin['id'], 
+                $customer_name,
+                $customer_phone,
+                $customer_email,
+                $quantity,
+                $unit_price,
+                $total_amount,
+                $commission_rate,
+                $commission_amount,
+                $payment_method,
+                $payment_method === 'cash' ? $cash_received : null,
+                $change_amount,
+                json_encode($ticket_numbers),
+                $notes
+            ], true);
 
             // Actualizar contador de boletos vendidos
-            $sql_update = "UPDATE raffles SET sold_tickets = sold_tickets + ? WHERE id = ?";
+            $sql_update = "UPDATE raffles SET 
+                          sold_tickets = sold_tickets + ?,
+                          updated_at = NOW() 
+                          WHERE id = ?";
             executeQuery($sql_update, [$quantity, $raffle_id]);
 
             // Confirmar transacción
             $pdo->commit();
 
-            logAdminActivity('sell_tickets', "Venta realizada: {$quantity} boletos de rifa '{$raffle['name']}' - Total: ${$total_amount} - Comisión: ${$commission_amount}");
+            // Log de actividad
+            logAdminActivity('sell_tickets', "Venta #$sale_id: {$quantity} boletos de rifa '{$raffle['name']}' - Cliente: {$customer_name} - Total: ${$total_amount} - Comisión: ${$commission_amount}");
             
-            $success_message = "¡Venta realizada exitosamente!\n";
+            $success_message = "¡Venta registrada exitosamente!\n";
+            $success_message .= "ID de Venta: #$sale_id\n";
             $success_message .= "Boletos: " . implode(', ', $ticket_numbers) . "\n";
             $success_message .= "Total: $" . number_format($total_amount, 2) . "\n";
             $success_message .= "Tu comisión: $" . number_format($commission_amount, 2);
@@ -191,6 +195,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error_message = $e->getMessage();
         error_log("Error en venta de boletos: " . $e->getMessage());
     }
+}
+
+// Obtener estadísticas del vendedor actual
+$seller_stats = [
+    'total_sales' => 0,
+    'total_tickets' => 0,
+    'total_commission' => 0,
+    'sales_this_month' => 0
+];
+
+try {
+    // Total de ventas del vendedor
+    $stats_query = "SELECT 
+                        COUNT(*) as total_sales,
+                        COALESCE(SUM(quantity), 0) as total_tickets,
+                        COALESCE(SUM(commission_amount), 0) as total_commission
+                    FROM sells 
+                    WHERE seller_id = ? AND status = 'completed'";
+    
+    $stats = fetchOne($stats_query, [$current_admin['id']]);
+    if ($stats) {
+        $seller_stats['total_sales'] = $stats['total_sales'];
+        $seller_stats['total_tickets'] = $stats['total_tickets'];
+        $seller_stats['total_commission'] = $stats['total_commission'];
+    }
+
+    // Ventas del mes actual
+    $month_query = "SELECT COUNT(*) as sales_this_month 
+                   FROM sells 
+                   WHERE seller_id = ? 
+                   AND status = 'completed'
+                   AND MONTH(created_at) = MONTH(CURRENT_DATE()) 
+                   AND YEAR(created_at) = YEAR(CURRENT_DATE())";
+    
+    $month_stats = fetchOne($month_query, [$current_admin['id']]);
+    if ($month_stats) {
+        $seller_stats['sales_this_month'] = $month_stats['sales_this_month'];
+    }
+
+} catch (Exception $e) {
+    error_log("Error al obtener estadísticas del vendedor: " . $e->getMessage());
 }
 ?>
 <!DOCTYPE html>
@@ -298,7 +343,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         .payment-methods {
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: repeat(3, 1fr);
             gap: 1rem;
             margin-top: 0.5rem;
         }
@@ -519,6 +564,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             letter-spacing: 0.5px;
         }
 
+        /* Estadísticas del vendedor */
+        .seller-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+            text-align: center;
+            border: 1px solid #e2e8f0;
+        }
+
+        .stat-number {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #10b981;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-label {
+            color: #64748b;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        /* Database notice */
+        .db-notice {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+            padding: 1rem;
+            border-radius: 10px;
+            margin-bottom: 2rem;
+            text-align: center;
+            font-weight: 600;
+        }
+
         @media (max-width: 768px) {
             .form-grid {
                 grid-template-columns: 1fr;
@@ -546,6 +632,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             .raffle-details {
                 grid-template-columns: 1fr;
             }
+
+            .seller-stats {
+                grid-template-columns: repeat(2, 1fr);
+            }
         }
     </style>
 </head>
@@ -555,7 +645,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <div class="sell-header">
             <div class="header-info">
                 <h1><i class="fas fa-shopping-cart"></i> Vender Boletos</h1>
-                <p>Registra una nueva venta con precios actualizados</p>
+                <p>Registra una nueva venta - Los datos se guardan en la base de datos</p>
             </div>
             <div class="admin-info">
                 <div class="admin-badge">Vendedor</div>
@@ -573,6 +663,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         Cerrar Sesión
                     </a>
                 </div>
+            </div>
+        </div>
+
+        <div class="db-notice">
+            📊 Todas las ventas se registran en la tabla "sells" y se relacionan con tu usuario vendedor
+        </div>
+
+        <!-- Estadísticas del vendedor -->
+        <div class="seller-stats">
+            <div class="stat-card">
+                <div class="stat-number"><?php echo number_format($seller_stats['total_sales']); ?></div>
+                <div class="stat-label">Ventas Totales</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number"><?php echo number_format($seller_stats['total_tickets']); ?></div>
+                <div class="stat-label">Boletos Vendidos</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">$<?php echo number_format($seller_stats['total_commission'], 2); ?></div>
+                <div class="stat-label">Comisiones Ganadas</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number"><?php echo number_format($seller_stats['sales_this_month']); ?></div>
+                <div class="stat-label">Ventas Este Mes</div>
             </div>
         </div>
 
@@ -725,6 +839,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     <i class="fas fa-university payment-icon"></i>
                                     <div>Transferencia</div>
                                 </div>
+                                <div class="payment-option" onclick="selectPaymentMethod('card')">
+                                    <i class="fas fa-credit-card payment-icon"></i>
+                                    <div>Tarjeta</div>
+                                </div>
                             </div>
                             <input type="hidden" id="payment_method" name="payment_method" required>
                         </div>
@@ -805,8 +923,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             Cancelar
                         </a>
                         <button type="submit" class="btn btn-primary" id="submit-btn" disabled>
-                            <i class="fas fa-shopping-cart"></i>
-                            Procesar Venta
+                            <i class="fas fa-database"></i>
+                            Registrar Venta en BD
                         </button>
                     </div>
                 </form>
