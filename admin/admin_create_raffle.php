@@ -102,63 +102,518 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Crear Nueva Rifa - Panel de Administración</title>
-    <link rel="stylesheet" href="../assets/css/admin/admin_login.css">
-    <link rel="stylesheet" href="../assets/css/admin/panel.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <title>Crear Nueva Rifa - Panel de <?php echo ucfirst($current_admin['user_type']); ?></title>
     <meta name="robots" content="noindex, nofollow">
-    <link rel="stylesheet" href="./assets/css/partials/footer.css">
-    <link rel="stylesheet" href="../assets/css/admin/admin_create_raffle.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #ffffff;
+            color: #1f2937;
+            line-height: 1.6;
+        }
+
+        /* Header Unificado */
+        .main-header {
+            background: #ffffff;
+            border-bottom: 1px solid #e5e7eb;
+            padding: 1.5rem 2rem;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .user-avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 700;
+            font-size: 1.2rem;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+        }
+
+        .header-info h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #111827;
+            margin-bottom: 0.25rem;
+        }
+
+        .breadcrumb {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.85rem;
+            color: #6b7280;
+        }
+
+        .breadcrumb a {
+            color: #3b82f6;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .breadcrumb a:hover {
+            text-decoration: underline;
+        }
+
+        .user-role {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .role-admin {
+            background: linear-gradient(135deg, #dc2626, #b91c1c);
+            color: white;
+        }
+
+        .role-committee {
+            background: linear-gradient(135deg, #7c3aed, #6d28d9);
+            color: white;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.25rem;
+            border-radius: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-decoration: none;
+            border: none;
+            font-size: 0.9rem;
+        }
+
+        .btn-secondary {
+            background: #f3f4f6;
+            color: #6b7280;
+            border: 1px solid #d1d5db;
+        }
+
+        .btn-secondary:hover {
+            background: #e5e7eb;
+            color: #374151;
+            text-decoration: none;
+            transform: translateY(-1px);
+        }
+
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+            border: 1px solid #ef4444;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+            border-color: #dc2626;
+            color: white;
+            text-decoration: none;
+            transform: translateY(-1px);
+        }
+
+        /* Main Container */
+        .main-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        /* Content Section */
+        .content-section {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .section-header {
+            padding: 1.5rem 2rem;
+            border-bottom: 1px solid #e5e7eb;
+            background: #fafbfc;
+        }
+
+        .section-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #111827;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .section-title i {
+            color: #6b7280;
+        }
+
+        .section-description {
+            color: #6b7280;
+            font-size: 0.9rem;
+        }
+
+        .section-content {
+            padding: 2rem;
+        }
+
+        /* Alerts */
+        .alert {
+            padding: 1rem;
+            border-radius: 12px;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+        }
+
+        .alert-success {
+            background: #f0fdf4;
+            color: #166534;
+            border: 1px solid #bbf7d0;
+        }
+
+        .alert-error {
+            background: #fef2f2;
+            color: #991b1b;
+            border: 1px solid #fecaca;
+        }
+
+        .alert-icon {
+            width: 20px;
+            height: 20px;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
+        /* Form Styles */
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .form-grid.single-column {
+            grid-template-columns: 1fr;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-label {
+            display: block;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        .form-input, .form-select, .form-textarea {
+            width: 100%;
+            padding: 0.875rem 1rem;
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            font-size: 1rem;
+            transition: all 0.2s ease;
+            background: white;
+        }
+
+        .form-input:focus, .form-select:focus, .form-textarea:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .form-textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        /* Image Upload */
+        .image-upload-container {
+            border: 2px dashed #d1d5db;
+            border-radius: 12px;
+            padding: 2rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background: #fafbfc;
+        }
+
+        .image-upload-container:hover {
+            border-color: #3b82f6;
+            background: #eff6ff;
+        }
+
+        .upload-icon {
+            font-size: 3rem;
+            color: #9ca3af;
+            margin-bottom: 1rem;
+        }
+
+        .upload-text {
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 0.5rem;
+        }
+
+        .upload-subtext {
+            color: #6b7280;
+            font-size: 0.85rem;
+        }
+
+        .hidden-input {
+            display: none;
+        }
+
+        .image-preview {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin-top: 1rem;
+        }
+
+        .preview-item {
+            position: relative;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .preview-image {
+            width: 100px;
+            height: 100px;
+            object-fit: cover;
+        }
+
+        .remove-image {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            background: #ef4444;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+        }
+
+        /* Calculations Panel */
+        .calculations-panel {
+            background: linear-gradient(135deg, #eff6ff, #dbeafe);
+            border: 2px solid #3b82f6;
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-top: 1.5rem;
+        }
+
+        .calculations-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #1e40af;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .calc-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid rgba(59, 130, 246, 0.1);
+        }
+
+        .calc-row:last-child {
+            border-bottom: none;
+            padding-top: 1rem;
+            margin-top: 0.5rem;
+            border-top: 2px solid rgba(59, 130, 246, 0.2);
+            font-weight: 700;
+            font-size: 1.1rem;
+        }
+
+        .calc-label {
+            color: #1e40af;
+            font-weight: 500;
+        }
+
+        .calc-value {
+            color: #1e3a8a;
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        /* Buttons */
+        .btn-primary {
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            color: white;
+            border: 1px solid #3b82f6;
+        }
+
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #1d4ed8, #1e3a8a);
+            border-color: #1d4ed8;
+            color: white;
+            text-decoration: none;
+            transform: translateY(-1px);
+            box-shadow: 0 8px 20px rgba(59, 130, 246, 0.3);
+        }
+
+        .form-buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: flex-end;
+            margin-top: 2rem;
+            padding-top: 2rem;
+            border-top: 1px solid #e5e7eb;
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .main-container {
+                padding: 1rem;
+            }
+
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .header-content {
+                flex-direction: column;
+                gap: 1rem;
+                text-align: center;
+            }
+
+            .header-right {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+
+            .section-content {
+                padding: 1.5rem;
+            }
+
+            .form-buttons {
+                flex-direction: column;
+            }
+        }
+    </style>
 </head>
 <body>
-    <div class="create-raffle-container">
-        <!-- Header -->
-        <div class="create-raffle-header">
-            <div class="header-info">
-                <h1>Crear Nueva Rifa</h1>
-                <p>Complete la información para crear una nueva rifa</p>
+    <!-- Header Unificado -->
+    <header class="main-header">
+        <div class="header-content">
+            <div class="header-left">
+                <div class="user-avatar">
+                    <?php echo strtoupper(substr($current_admin['username'], 0, 1)); ?>
+                </div>
+                <div class="header-info">
+                    <div class="breadcrumb">
+                        <a href="panel.php">Panel</a>
+                        <i class="fas fa-chevron-right"></i>
+                        <span>Crear Rifa</span>
+                    </div>
+                    <h1>Crear Nueva Rifa</h1>
+                </div>
             </div>
-            <div class="admin-info">
-                <div class="admin-badge"><?php echo htmlspecialchars($current_admin['user_type']); ?></div>
-                <div class="admin-details">
-                    <?php echo htmlspecialchars($current_admin['username']); ?><br>
-                    <?php echo htmlspecialchars($current_admin['email']); ?>
+            <div class="header-right">
+                <div class="user-role role-<?php echo $current_admin['user_type']; ?>">
+                    <i class="fas fa-<?php echo $current_admin['user_type'] === 'admin' ? 'crown' : 'users'; ?>"></i>
+                    <?php echo ucfirst($current_admin['user_type']); ?>
                 </div>
-                <div style="margin-top: 1rem;">
-                    <a href="panel.php" class="btn btn-secondary" style="margin-right: 1rem;">
-                        <i class="fas fa-arrow-left"></i>
-                        Volver al Panel
-                    </a>
-                    <a href="?logout=1" class="logout-btn" onclick="return confirm('¿Estás seguro de que deseas cerrar sesión?')">
-                        <i class="fas fa-sign-out-alt"></i>
-                        Cerrar Sesión
-                    </a>
-                </div>
+                <a href="panel.php" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i>
+                    Volver
+                </a>
+                <a href="?logout=1" class="btn btn-danger" onclick="return confirm('¿Estás seguro de que deseas cerrar sesión?')">
+                    <i class="fas fa-sign-out-alt"></i>
+                    Cerrar Sesión
+                </a>
             </div>
         </div>
+    </header>
 
+    <!-- Main Container -->
+    <main class="main-container">
         <!-- Formulario -->
-        <div class="form-container">
-            <div class="form-header">
-                <h2><i class="fas fa-gift"></i> Información de la Rifa</h2>
+        <div class="content-section">
+            <div class="section-header">
+                <div>
+                    <h2 class="section-title">
+                        <i class="fas fa-gift"></i>
+                        Información de la Rifa
+                    </h2>
+                    <p class="section-description">Complete toda la información para crear una nueva rifa</p>
+                </div>
             </div>
 
-            <div class="form-content">
+            <div class="section-content">
                 <?php if ($success_message): ?>
                     <div class="alert alert-success">
-                        <i class="fas fa-check-circle"></i> <?php echo htmlspecialchars($success_message); ?>
+                        <i class="fas fa-check-circle alert-icon"></i>
+                        <span><?php echo htmlspecialchars($success_message); ?></span>
                     </div>
                 <?php endif; ?>
 
                 <?php if ($error_message): ?>
                     <div class="alert alert-error">
-                        <i class="fas fa-exclamation-triangle"></i> <?php echo htmlspecialchars($error_message); ?>
+                        <i class="fas fa-exclamation-triangle alert-icon"></i>
+                        <span><?php echo htmlspecialchars($error_message); ?></span>
                     </div>
                 <?php endif; ?>
 
                 <form method="POST" enctype="multipart/form-data" id="raffleForm">
+                    <!-- Información Básica -->
                     <div class="form-grid">
-                        <!-- Nombre de la rifa -->
                         <div class="form-group">
                             <label class="form-label" for="raffle_name">
                                 <i class="fas fa-tag"></i> Nombre de la Rifa *
@@ -171,7 +626,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                    required>
                         </div>
 
-                        <!-- Precio del boleto -->
                         <div class="form-group">
                             <label class="form-label" for="ticket_price">
                                 <i class="fas fa-dollar-sign"></i> Precio del Boleto *
@@ -185,8 +639,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                    min="0.01"
                                    required>
                         </div>
+                    </div>
 
-                        <!-- Número total de boletos -->
+                    <div class="form-grid">
                         <div class="form-group">
                             <label class="form-label" for="total_tickets">
                                 <i class="fas fa-ticket-alt"></i> Número Total de Boletos *
@@ -200,7 +655,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                    required>
                         </div>
 
-                        <!-- Tasa de comisión -->
                         <div class="form-group">
                             <label class="form-label" for="commission_rate">
                                 <i class="fas fa-percentage"></i> Tasa de Comisión (%)
@@ -215,8 +669,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                    max="100"
                                    value="10">
                         </div>
+                    </div>
 
-                        <!-- Fecha del sorteo -->
+                    <div class="form-grid">
                         <div class="form-group">
                             <label class="form-label" for="draw_date">
                                 <i class="fas fa-calendar"></i> Fecha del Sorteo *
@@ -228,7 +683,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                    required>
                         </div>
 
-                        <!-- Hora del sorteo -->
                         <div class="form-group">
                             <label class="form-label" for="draw_time">
                                 <i class="fas fa-clock"></i> Hora del Sorteo *
@@ -239,42 +693,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                    class="form-input" 
                                    required>
                         </div>
+                    </div>
 
-                        <!-- Descripción -->
-                        <div class="form-group full-width">
-                            <label class="form-label" for="description">
-                                <i class="fas fa-align-left"></i> Descripción (Opcional)
-                            </label>
-                            <textarea id="description" 
-                                      name="description" 
-                                      class="form-input form-textarea" 
-                                      placeholder="Descripción detallada de la rifa, términos y condiciones, etc."></textarea>
-                        </div>
+                    <!-- Descripción -->
+                    <div class="form-group">
+                        <label class="form-label" for="description">
+                            <i class="fas fa-align-left"></i> Descripción (Opcional)
+                        </label>
+                        <textarea id="description" 
+                                  name="description" 
+                                  class="form-textarea" 
+                                  placeholder="Descripción detallada de la rifa, términos y condiciones, etc."></textarea>
+                    </div>
 
-                        <!-- Subida de imágenes -->
-                        <div class="form-group full-width">
-                            <label class="form-label">
-                                <i class="fas fa-images"></i> Imágenes de la Rifa (Máximo 5)
-                            </label>
-                            <div class="image-upload-container" onclick="document.getElementById('images').click()">
-                                <div class="upload-icon">
-                                    <i class="fas fa-cloud-upload-alt"></i>
-                                </div>
-                                <div class="upload-text">
-                                    Haz clic aquí o arrastra las imágenes
-                                </div>
-                                <div class="upload-subtext">
-                                    Formatos soportados: JPG, PNG, GIF (Máximo 5MB cada una)
-                                </div>
+                    <!-- Subida de imágenes -->
+                    <div class="form-group">
+                        <label class="form-label">
+                            <i class="fas fa-images"></i> Imágenes de la Rifa (Máximo 5)
+                        </label>
+                        <div class="image-upload-container" onclick="document.getElementById('images').click()">
+                            <div class="upload-icon">
+                                <i class="fas fa-cloud-upload-alt"></i>
                             </div>
-                            <input type="file" 
-                                   id="images" 
-                                   name="images[]" 
-                                   class="hidden-input" 
-                                   multiple 
-                                   accept="image/*">
-                            <div id="imagePreview" class="image-preview"></div>
+                            <div class="upload-text">
+                                Haz clic aquí o arrastra las imágenes
+                            </div>
+                            <div class="upload-subtext">
+                                Formatos soportados: JPG, PNG, GIF (Máximo 5MB cada una)
+                            </div>
                         </div>
+                        <input type="file" 
+                               id="images" 
+                               name="images[]" 
+                               class="hidden-input" 
+                               multiple 
+                               accept="image/*">
+                        <div id="imagePreview" class="image-preview"></div>
                     </div>
 
                     <!-- Panel de cálculos -->
@@ -311,8 +765,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </form>
             </div>
         </div>
-    </div>
+    </main>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
     <script>
         // Configurar fecha mínima (hoy)
         document.getElementById('draw_date').min = new Date().toISOString().split('T')[0];
@@ -331,17 +786,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Drag and drop
         uploadContainer.addEventListener('dragover', function(e) {
             e.preventDefault();
-            uploadContainer.classList.add('dragover');
+            uploadContainer.style.borderColor = '#3b82f6';
+            uploadContainer.style.background = '#eff6ff';
         });
 
         uploadContainer.addEventListener('dragleave', function(e) {
             e.preventDefault();
-            uploadContainer.classList.remove('dragover');
+            uploadContainer.style.borderColor = '#d1d5db';
+            uploadContainer.style.background = '#fafbfc';
         });
 
         uploadContainer.addEventListener('drop', function(e) {
             e.preventDefault();
-            uploadContainer.classList.remove('dragover');
+            uploadContainer.style.borderColor = '#d1d5db';
+            uploadContainer.style.background = '#fafbfc';
             handleFiles(e.dataTransfer.files);
         });
 
