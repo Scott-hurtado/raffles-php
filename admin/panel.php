@@ -18,15 +18,44 @@ if (isset($_GET['logout'])) {
 // Obtener rifas reales de la base de datos con datos actualizados
 $rifas_data = [];
 try {
-    $sql = "SELECT 
-                r.*,
-                COALESCE(r.sold_tickets, 0) as sold_tickets,
-                a.username as created_by_name
-            FROM raffles r 
-            LEFT JOIN admins a ON r.created_by = a.id 
-            ORDER BY r.updated_at DESC, r.created_at DESC";
-    
-    $rifas_data = fetchAll($sql);
+    if ($current_admin['user_type'] === 'committee') {
+        // Para comité, obtener precios y comisiones específicos de raffle_committee
+        $sql = "SELECT 
+                    r.*,
+                    COALESCE(r.sold_tickets, 0) as sold_tickets,
+                    a.username as created_by_name,
+                    rc.ticket_price as committee_ticket_price,
+                    rc.commission_rate as committee_commission_rate,
+                    rc.original_price,
+                    rc.updated_at as committee_updated_at,
+                    CASE 
+                        WHEN rc.ticket_price IS NOT NULL THEN rc.ticket_price 
+                        ELSE r.ticket_price 
+                    END as display_ticket_price,
+                    CASE 
+                        WHEN rc.commission_rate IS NOT NULL THEN rc.commission_rate 
+                        ELSE r.commission_rate 
+                    END as display_commission_rate
+                FROM raffles r 
+                LEFT JOIN admins a ON r.created_by = a.id 
+                LEFT JOIN raffle_committee rc ON r.id = rc.raffle_id AND rc.committee_id = ? AND rc.is_active = 1
+                ORDER BY r.updated_at DESC, r.created_at DESC";
+        
+        $rifas_data = fetchAll($sql, [$current_admin['id']]);
+    } else {
+        // Para admin y seller, usar precios originales
+        $sql = "SELECT 
+                    r.*,
+                    COALESCE(r.sold_tickets, 0) as sold_tickets,
+                    a.username as created_by_name,
+                    r.ticket_price as display_ticket_price,
+                    r.commission_rate as display_commission_rate
+                FROM raffles r 
+                LEFT JOIN admins a ON r.created_by = a.id 
+                ORDER BY r.updated_at DESC, r.created_at DESC";
+        
+        $rifas_data = fetchAll($sql);
+    }
     
     // Procesar datos para la vista
     foreach ($rifas_data as &$rifa) {
@@ -41,12 +70,19 @@ try {
         $rifa['formatted_date'] = date('d/m/Y H:i', strtotime($rifa['draw_date']));
         $rifa['days_remaining'] = ceil((strtotime($rifa['draw_date']) - time()) / 86400);
         
-        // Calcular potencial de ingresos basado en precio actual
-        $rifa['potential_revenue'] = $rifa['total_tickets'] * $rifa['ticket_price'];
-        $rifa['current_revenue'] = $rifa['sold_tickets'] * $rifa['ticket_price'];
+        // Calcular potencial de ingresos basado en precio del comité o admin
+        $rifa['potential_revenue'] = $rifa['total_tickets'] * $rifa['display_ticket_price'];
+        $rifa['current_revenue'] = $rifa['sold_tickets'] * $rifa['display_ticket_price'];
         
-        // Calcular comisiones totales
-        $rifa['total_commission'] = $rifa['current_revenue'] * ($rifa['commission_rate'] / 100);
+        // Calcular comisiones basadas en la tasa del comité o admin
+        $rifa['total_commission'] = $rifa['current_revenue'] * ($rifa['display_commission_rate'] / 100);
+        
+        // Marcar si tiene cambios del comité
+        if ($current_admin['user_type'] === 'committee') {
+            $rifa['has_committee_changes'] = isset($rifa['committee_ticket_price']) || isset($rifa['committee_commission_rate']);
+            $rifa['recently_updated_by_committee'] = isset($rifa['committee_updated_at']) && 
+                strtotime($rifa['committee_updated_at']) > strtotime('-1 hour');
+        }
     }
 } catch (Exception $e) {
     error_log("Error al obtener rifas: " . $e->getMessage());
@@ -70,25 +106,66 @@ try {
     // Total de usuarios registrados
     $stats['total_users'] = fetchOne("SELECT COUNT(*) as count FROM admins")['count'] ?? 0;
     
-    // Ventas del mes (usando precio actual de cada rifa)
-    $monthly_sales_query = "
-        SELECT COALESCE(SUM(r.ticket_price * r.sold_tickets), 0) as total 
-        FROM raffles r 
-        WHERE MONTH(r.created_at) = MONTH(CURRENT_DATE()) 
-        AND YEAR(r.created_at) = YEAR(CURRENT_DATE())
-    ";
-    $stats['monthly_sales'] = fetchOne($monthly_sales_query)['total'] ?? 0;
+    if ($current_admin['user_type'] === 'committee') {
+        // Para comité, usar precios específicos del comité en cálculos
+        $monthly_sales_query = "
+            SELECT COALESCE(SUM(
+                CASE 
+                    WHEN rc.ticket_price IS NOT NULL THEN rc.ticket_price * r.sold_tickets
+                    ELSE r.ticket_price * r.sold_tickets 
+                END
+            ), 0) as total 
+            FROM raffles r 
+            LEFT JOIN raffle_committee rc ON r.id = rc.raffle_id AND rc.committee_id = ? AND rc.is_active = 1
+            WHERE MONTH(r.created_at) = MONTH(CURRENT_DATE()) 
+            AND YEAR(r.created_at) = YEAR(CURRENT_DATE())
+        ";
+        $stats['monthly_sales'] = fetchOne($monthly_sales_query, [$current_admin['id']])['total'] ?? 0;
+        
+        $revenue_query = "
+            SELECT COALESCE(SUM(
+                CASE 
+                    WHEN rc.ticket_price IS NOT NULL THEN rc.ticket_price * r.sold_tickets
+                    ELSE r.ticket_price * r.sold_tickets 
+                END
+            ), 0) as total 
+            FROM raffles r 
+            LEFT JOIN raffle_committee rc ON r.id = rc.raffle_id AND rc.committee_id = ? AND rc.is_active = 1
+        ";
+        $stats['total_revenue'] = fetchOne($revenue_query, [$current_admin['id']])['total'] ?? 0;
+        
+        $commissions_query = "
+            SELECT COALESCE(SUM(
+                CASE 
+                    WHEN rc.ticket_price IS NOT NULL AND rc.commission_rate IS NOT NULL THEN 
+                        rc.ticket_price * r.sold_tickets * (rc.commission_rate / 100)
+                    ELSE 
+                        r.ticket_price * r.sold_tickets * (r.commission_rate / 100)
+                END
+            ), 0) as total 
+            FROM raffles r 
+            LEFT JOIN raffle_committee rc ON r.id = rc.raffle_id AND rc.committee_id = ? AND rc.is_active = 1
+        ";
+        $stats['total_commissions'] = fetchOne($commissions_query, [$current_admin['id']])['total'] ?? 0;
+    } else {
+        // Para admin y seller, usar precios originales
+        $monthly_sales_query = "
+            SELECT COALESCE(SUM(r.ticket_price * r.sold_tickets), 0) as total 
+            FROM raffles r 
+            WHERE MONTH(r.created_at) = MONTH(CURRENT_DATE()) 
+            AND YEAR(r.created_at) = YEAR(CURRENT_DATE())
+        ";
+        $stats['monthly_sales'] = fetchOne($monthly_sales_query)['total'] ?? 0;
+        
+        $revenue_query = "SELECT COALESCE(SUM(r.ticket_price * r.sold_tickets), 0) as total FROM raffles r";
+        $stats['total_revenue'] = fetchOne($revenue_query)['total'] ?? 0;
+        
+        $commissions_query = "SELECT COALESCE(SUM(r.ticket_price * r.sold_tickets * (r.commission_rate / 100)), 0) as total FROM raffles r";
+        $stats['total_commissions'] = fetchOne($commissions_query)['total'] ?? 0;
+    }
     
-    // Total de boletos vendidos
+    // Total de boletos vendidos (igual para todos)
     $stats['total_tickets_sold'] = fetchOne("SELECT COALESCE(SUM(sold_tickets), 0) as total FROM raffles")['total'] ?? 0;
-    
-    // Revenue total
-    $revenue_query = "SELECT COALESCE(SUM(r.ticket_price * r.sold_tickets), 0) as total FROM raffles r";
-    $stats['total_revenue'] = fetchOne($revenue_query)['total'] ?? 0;
-    
-    // Comisiones totales
-    $commissions_query = "SELECT COALESCE(SUM(r.ticket_price * r.sold_tickets * (r.commission_rate / 100)), 0) as total FROM raffles r";
-    $stats['total_commissions'] = fetchOne($commissions_query)['total'] ?? 0;
     
 } catch (Exception $e) {
     error_log("Error al obtener estadísticas: " . $e->getMessage());
@@ -208,12 +285,12 @@ try {
                                     </div>
                                 </td>
                                 <td>
-                                    <div class="rifa-price">$<?php echo number_format($rifa['ticket_price'], 2); ?></div>
+                                    <div class="rifa-price">$<?php echo number_format($rifa['display_ticket_price'], 2); ?></div>
                                     <div style="font-size: 0.8rem; color: #6b7280;">
-                                        Comisión: <?php echo number_format($rifa['commission_rate'], 1); ?>%
+                                        Comisión: <?php echo number_format($rifa['display_commission_rate'], 1); ?>%
                                     </div>
                                     <div style="font-size: 0.8rem; color: #059669; font-weight: 600;">
-                                        $<?php echo number_format($rifa['ticket_price'] * ($rifa['commission_rate'] / 100), 2); ?> por boleto
+                                        $<?php echo number_format($rifa['display_ticket_price'] * ($rifa['display_commission_rate'] / 100), 2); ?> por boleto
                                     </div>
                                     <?php if (strtotime($rifa['updated_at']) > strtotime('-1 hour')): ?>
                                         <div style="font-size: 0.7rem; color: #f59e0b; font-weight: 600;">
@@ -401,7 +478,7 @@ try {
                             </div>
                         </div>
                         <div class="stat-number">$<?php echo number_format($stats['total_revenue'], 0); ?></div>
-                        <div class="stat-label">Revenue Total</div>
+                        <div class="stat-label">Revenue Total (Con tus precios)</div>
                     </div>
                     
                     <div class="stat-card">
@@ -411,7 +488,7 @@ try {
                             </div>
                         </div>
                         <div class="stat-number">$<?php echo number_format($stats['total_commissions'], 0); ?></div>
-                        <div class="stat-label">Comisiones Generadas</div>
+                        <div class="stat-label">Comisiones (Con tus tasas)</div>
                     </div>
                 </div>
                 
@@ -439,7 +516,10 @@ try {
                         </thead>
                         <tbody>
                             <?php foreach ($rifas_data as $rifa): ?>
-                            <?php $progress_percentage = $rifa['total_tickets'] > 0 ? ($rifa['sold_tickets'] / $rifa['total_tickets']) * 100 : 0; ?>
+                            <?php 
+                                $progress_percentage = $rifa['total_tickets'] > 0 ? ($rifa['sold_tickets'] / $rifa['total_tickets']) * 100 : 0;
+                                $has_custom_pricing = isset($rifa['committee_ticket_price']) || isset($rifa['committee_commission_rate']);
+                            ?>
                             <tr>
                                 <td>
                                     <div class="rifa-name"><?php echo htmlspecialchars($rifa['name']); ?></div>
@@ -448,16 +528,30 @@ try {
                                     </div>
                                 </td>
                                 <td>
-                                    <div class="rifa-price">$<?php echo number_format($rifa['ticket_price'], 2); ?></div>
+                                    <div class="rifa-price">
+                                        $<?php echo number_format($rifa['display_ticket_price'], 2); ?>
+                                        <?php if ($has_custom_pricing && $rifa['display_ticket_price'] != $rifa['ticket_price']): ?>
+                                            <small style="color: #10b981; font-weight: 600;">(Personalizado)</small>
+                                        <?php endif; ?>
+                                    </div>
                                     <div style="font-size: 0.8rem; color: #059669; font-weight: 600;">
-                                        <?php echo number_format($rifa['commission_rate'], 1); ?>% comisión
+                                        <?php echo number_format($rifa['display_commission_rate'], 1); ?>% comisión
+                                        <?php if ($has_custom_pricing && $rifa['display_commission_rate'] != $rifa['commission_rate']): ?>
+                                            <small style="color: #10b981;">(Personalizada)</small>
+                                        <?php endif; ?>
                                     </div>
                                     <div style="font-size: 0.8rem; color: #6b7280;">
-                                        $<?php echo number_format($rifa['ticket_price'] * ($rifa['commission_rate'] / 100), 2); ?> por venta
+                                        $<?php echo number_format($rifa['display_ticket_price'] * ($rifa['display_commission_rate'] / 100), 2); ?> por venta
                                     </div>
-                                    <?php if (strtotime($rifa['updated_at']) > strtotime('-1 hour')): ?>
+                                    <?php if (isset($rifa['recently_updated_by_committee']) && $rifa['recently_updated_by_committee']): ?>
                                         <div style="font-size: 0.7rem; color: #f59e0b; font-weight: 600;">
-                                            ✨ Recién actualizado
+                                            ✨ Actualizado por ti
+                                        </div>
+                                    <?php endif; ?>
+                                    <?php if ($has_custom_pricing): ?>
+                                        <div style="font-size: 0.7rem; color: #6b7280; margin-top: 0.2rem;">
+                                            Original: $<?php echo number_format($rifa['ticket_price'], 2); ?> 
+                                            (<?php echo number_format($rifa['commission_rate'], 1); ?>%)
                                         </div>
                                     <?php endif; ?>
                                 </td>
@@ -478,6 +572,9 @@ try {
                                     </div>
                                     <div style="font-size: 0.8rem; color: #6b7280;">
                                         de $<?php echo number_format($rifa['potential_revenue'], 0); ?>
+                                    </div>
+                                    <div style="font-size: 0.8rem; color: #f59e0b; font-weight: 600;">
+                                        Comisiones: $<?php echo number_format($rifa['total_commission'], 0); ?>
                                     </div>
                                 </td>
                                 <td>
@@ -532,7 +629,7 @@ try {
     </div>
 
     <?php else: ?>
-    <!-- Vista Seller con precios y comisiones actualizadas -->
+    <!-- Vista Seller con precios y comisiones del comité -->
     <div class="seller-panel">
         <div class="panel-container">
             <!-- Header Seller -->
@@ -597,7 +694,7 @@ try {
                     </div>
                 </div>
                 
-                <!-- Rifas Disponibles para Vender con precios actualizados -->
+                <!-- Rifas Disponibles para Vender -->
                 <div class="rifas-table-container">
                     <div class="table-header">
                         <h2 class="table-title">Rifas Disponibles</h2>
@@ -624,7 +721,7 @@ try {
                             <?php 
                                 $available_tickets = $rifa['total_tickets'] - $rifa['sold_tickets'];
                                 $my_sales = 0; // Aquí implementarías la lógica para obtener las ventas del vendedor actual
-                                $commission = $rifa['ticket_price'] * ($rifa['commission_rate'] / 100);
+                                $commission = $rifa['display_ticket_price'] * ($rifa['display_commission_rate'] / 100);
                             ?>
                             <tr>
                                 <td>
@@ -638,7 +735,7 @@ try {
                                 </td>
                                 <td>
                                     <div class="rifa-price" style="font-size: 1.2rem; font-weight: 700;">
-                                        $<?php echo number_format($rifa['ticket_price'], 2); ?>
+                                        $<?php echo number_format($rifa['display_ticket_price'], 2); ?>
                                     </div>
                                 </td>
                                 <td>
@@ -646,7 +743,7 @@ try {
                                         $<?php echo number_format($commission, 2); ?>
                                     </div>
                                     <div style="font-size: 0.8rem; color: #059669;">
-                                        <?php echo number_format($rifa['commission_rate'], 1); ?>% por boleto
+                                        <?php echo number_format($rifa['display_commission_rate'], 1); ?>% por boleto
                                     </div>
                                 </td>
                                 <td>

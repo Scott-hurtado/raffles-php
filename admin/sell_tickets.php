@@ -28,14 +28,29 @@ $selected_raffle = null;
 // Obtener ID de rifa específica si se proporciona
 $selected_raffle_id = $_GET['rifa_id'] ?? null;
 
-// Obtener rifas disponibles con precios y comisiones actualizadas
+// Obtener rifas disponibles con precios y comisiones del comité
 $available_raffles = [];
 try {
     $sql = "SELECT 
-                r.id, r.name, r.ticket_price, r.commission_rate, r.total_tickets, 
+                r.id, r.name, r.total_tickets, 
                 COALESCE(r.sold_tickets, 0) as sold_tickets, 
-                r.status, r.draw_date, r.updated_at
+                r.status, r.draw_date, r.updated_at,
+                CASE 
+                    WHEN rc.ticket_price IS NOT NULL THEN rc.ticket_price 
+                    ELSE r.ticket_price 
+                END as ticket_price,
+                CASE 
+                    WHEN rc.commission_rate IS NOT NULL THEN rc.commission_rate 
+                    ELSE r.commission_rate 
+                END as commission_rate,
+                rc.original_price,
+                rc.updated_at as committee_updated_at,
+                CASE 
+                    WHEN rc.ticket_price IS NOT NULL THEN 1
+                    ELSE 0
+                END as has_committee_pricing
             FROM raffles r 
+            LEFT JOIN raffle_committee rc ON r.id = rc.raffle_id AND rc.is_active = 1
             WHERE r.status = 'active' 
             AND r.draw_date > NOW() 
             ORDER BY r.draw_date ASC";
@@ -85,8 +100,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             throw new Exception('Método de pago inválido');
         }
 
-        // Verificar disponibilidad de boletos y obtener precios actualizados
-        $raffle = fetchOne("SELECT * FROM raffles WHERE id = ? AND status = 'active'", [$raffle_id]);
+        // Verificar disponibilidad de boletos y obtener precios del comité
+        $raffle_query = "SELECT 
+                            r.*,
+                            CASE 
+                                WHEN rc.ticket_price IS NOT NULL THEN rc.ticket_price 
+                                ELSE r.ticket_price 
+                            END as final_ticket_price,
+                            CASE 
+                                WHEN rc.commission_rate IS NOT NULL THEN rc.commission_rate 
+                                ELSE r.commission_rate 
+                            END as final_commission_rate,
+                            rc.committee_id,
+                            rc.original_price
+                        FROM raffles r 
+                        LEFT JOIN raffle_committee rc ON r.id = rc.raffle_id AND rc.is_active = 1
+                        WHERE r.id = ? AND r.status = 'active'";
+        
+        $raffle = fetchOne($raffle_query, [$raffle_id]);
         if (!$raffle) {
             throw new Exception('La rifa seleccionada no está disponible');
         }
@@ -96,10 +127,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             throw new Exception("Solo quedan {$available_tickets} boletos disponibles");
         }
 
-        // Calcular totales con precios actualizados
-        $unit_price = $raffle['ticket_price']; // Precio actual de la base de datos
+        // Calcular totales con precios del comité
+        $unit_price = $raffle['final_ticket_price'];
         $total_amount = $unit_price * $quantity;
-        $commission_rate = $raffle['commission_rate']; // Comisión actual de la base de datos
+        $commission_rate = $raffle['final_commission_rate'];
         $commission_amount = $total_amount * ($commission_rate / 100);
 
         // Validar efectivo si es necesario
@@ -124,16 +155,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $pdo->beginTransaction();
 
         try {
-            // Insertar la venta en la tabla sells
+            // Insertar la venta en la tabla sells con precios del comité
             $sql_sale = "INSERT INTO sells (
                 raffle_id, seller_id, customer_name, customer_phone, customer_email,
                 quantity, unit_price, total_amount, commission_rate, commission_amount, 
                 payment_method, cash_received, change_amount, ticket_numbers, notes, 
+                committee_id, original_unit_price,
                 status, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed', NOW())";
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed', NOW())";
             
             // Preparar y ejecutar la consulta de inserción
-            $pdo = getDB();
             $stmt = $pdo->prepare($sql_sale);
             $stmt->execute([
                 $raffle_id,
@@ -142,15 +173,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $customer_phone,
                 $customer_email,
                 $quantity,
-                $unit_price,
+                $unit_price, // Precio del comité
                 $total_amount,
-                $commission_rate,
+                $commission_rate, // Comisión del comité
                 $commission_amount,
                 $payment_method,
                 $payment_method === 'cash' ? $cash_received : null,
                 $change_amount,
                 json_encode($ticket_numbers),
-                $notes
+                $notes,
+                $raffle['committee_id'], // ID del comité que estableció los precios
+                $raffle['ticket_price'] // Precio original de la rifa
             ]);
             
             // Obtener el ID de la venta recién insertada
@@ -166,14 +199,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Confirmar transacción
             $pdo->commit();
 
-            // Log de actividad
-            logAdminActivity('sell_tickets', "Venta #{$sale_id}: {$quantity} boletos de rifa '{$raffle['name']}' - Cliente: {$customer_name} - Total: $" . number_format($total_amount, 2) . " - Comisión: $" . number_format($commission_amount, 2));
+            // Log de actividad con información de precios del comité
+            $price_info = "";
+            if ($raffle['committee_id']) {
+                $price_info = " - Precio comité: $" . number_format($unit_price, 2) . 
+                             " (Original: $" . number_format($raffle['ticket_price'], 2) . ")";
+            }
+            
+            logAdminActivity('sell_tickets', "Venta #{$sale_id}: {$quantity} boletos de rifa '{$raffle['name']}' - Cliente: {$customer_name} - Total: $" . number_format($total_amount, 2) . " - Comisión: $" . number_format($commission_amount, 2) . $price_info);
             
             $success_message = "¡Venta registrada exitosamente!\n";
             $success_message .= "ID de Venta: #{$sale_id}\n";
             $success_message .= "Boletos: " . implode(', ', $ticket_numbers) . "\n";
             $success_message .= "Total: $" . number_format($total_amount, 2) . "\n";
             $success_message .= "Tu comisión: $" . number_format($commission_amount, 2);
+            
+            if ($raffle['committee_id']) {
+                $success_message .= "\n(Precios establecidos por el comité)";
+            }
             
             if ($change_amount > 0) {
                 $success_message .= "\nCambio: $" . number_format($change_amount, 2);
@@ -203,7 +246,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Obtener estadísticas del vendedor actual
+// Obtener estadísticas del vendedor actual usando precios del comité
 $seller_stats = [
     'total_sales' => 0,
     'total_tickets' => 0,
@@ -212,7 +255,7 @@ $seller_stats = [
 ];
 
 try {
-    // Total de ventas del vendedor
+    // Total de ventas del vendedor (usando precios reales de venta)
     $stats_query = "SELECT 
                         COUNT(*) as total_sales,
                         COALESCE(SUM(quantity), 0) as total_tickets,
@@ -570,6 +613,17 @@ try {
             letter-spacing: 0.5px;
         }
 
+        .committee-pricing-indicator {
+            background: #dcfdf7;
+            color: #059669;
+            padding: 0.3rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
         /* Estadísticas del vendedor */
         .seller-stats {
             display: grid;
@@ -651,7 +705,7 @@ try {
         <div class="sell-header">
             <div class="header-info">
                 <h1><i class="fas fa-shopping-cart"></i> Vender Boletos</h1>
-                <p>Registra una nueva venta - Los datos se guardan en la base de datos</p>
+                <p>Registra una nueva venta - Los precios pueden ser establecidos por el comité</p>
             </div>
             <div class="admin-info">
                 <div class="admin-badge">Vendedor</div>
@@ -673,7 +727,7 @@ try {
         </div>
 
         <div class="db-notice">
-            📊 Todas las ventas se registran en la tabla "sells" y se relacionan con tu usuario vendedor
+            📊 Los precios pueden ser personalizados por cada comité - Se registran en tabla "sells" con trazabilidad completa
         </div>
 
         <!-- Estadísticas del vendedor -->
@@ -705,6 +759,9 @@ try {
                 <?php if (strtotime($selected_raffle['updated_at']) > strtotime('-1 hour')): ?>
                     <span class="updated-indicator">🔄 Actualizada recientemente</span>
                 <?php endif; ?>
+                <?php if ($selected_raffle['has_committee_pricing']): ?>
+                    <span class="committee-pricing-indicator">👥 Precios del comité</span>
+                <?php endif; ?>
             </h3>
             <div class="raffle-details">
                 <div class="detail-item">
@@ -724,6 +781,15 @@ try {
                     <span class="detail-value"><?php echo number_format($selected_raffle['total_tickets'] - $selected_raffle['sold_tickets']); ?></span>
                 </div>
             </div>
+            
+            <?php if ($selected_raffle['has_committee_pricing'] && $selected_raffle['original_price']): ?>
+            <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(59, 130, 246, 0.2);">
+                <p style="font-size: 0.8rem; color: #6b7280;">
+                    <strong>Precio original:</strong> $<?php echo number_format($selected_raffle['original_price'], 2); ?>
+                    • <strong>Este precio fue personalizado por el comité</strong>
+                </p>
+            </div>
+            <?php endif; ?>
         </div>
         <?php endif; ?>
 
@@ -766,6 +832,7 @@ try {
                                         $available = $raffle['total_tickets'] - $raffle['sold_tickets']; 
                                         $isSelected = $selected_raffle && $selected_raffle['id'] == $raffle['id'];
                                         $recentlyUpdated = strtotime($raffle['updated_at']) > strtotime('-1 hour');
+                                        $hasCommitteePricing = $raffle['has_committee_pricing'];
                                     ?>
                                     <option value="<?php echo $raffle['id']; ?>" 
                                             data-price="<?php echo $raffle['ticket_price']; ?>"
@@ -776,6 +843,7 @@ try {
                                         $<?php echo number_format($raffle['ticket_price'], 2); ?> 
                                         (<?php echo number_format($raffle['commission_rate'], 1); ?>% comisión) -
                                         <?php echo $available; ?> disponibles
+                                        <?php if ($hasCommitteePricing): ?>👥<?php endif; ?>
                                         <?php if ($recentlyUpdated): ?>🔄<?php endif; ?>
                                     </option>
                                 <?php endforeach; ?>
@@ -930,7 +998,7 @@ try {
                         </a>
                         <button type="submit" class="btn btn-primary" id="submit-btn" disabled>
                             <i class="fas fa-database"></i>
-                            Registrar Venta en BD
+                            Registrar Venta
                         </button>
                     </div>
                 </form>
