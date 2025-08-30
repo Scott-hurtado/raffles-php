@@ -25,13 +25,21 @@ $error_message = '';
 
 // Obtener información real de la rifa desde la base de datos
 try {
-    $sql = "SELECT * FROM raffles WHERE id = ?";
-    $rifa_info = fetchOne($sql, [$rifa_id]);
+    $sql = "SELECT r.*, rc.ticket_price as committee_ticket_price, rc.commission_rate as committee_commission_rate
+            FROM raffles r 
+            LEFT JOIN raffle_committee rc ON r.id = rc.raffle_id AND rc.committee_id = ? AND rc.is_active = 1
+            WHERE r.id = ?";
+    $rifa_info = fetchOne($sql, [$current_admin['id'], $rifa_id]);
     
     if (!$rifa_info) {
         header('Location: panel.php');
         exit();
     }
+    
+    // Determinar precios actuales (del comité si existen, sino los originales)
+    $current_ticket_price = $rifa_info['committee_ticket_price'] ?? $rifa_info['ticket_price'];
+    $current_commission_rate = $rifa_info['committee_commission_rate'] ?? $rifa_info['commission_rate'];
+    
 } catch (Exception $e) {
     error_log("Error al obtener información de la rifa: " . $e->getMessage());
     header('Location: panel.php');
@@ -43,7 +51,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_settings'])) {
     try {
         $ticket_price = floatval($_POST['ticket_price'] ?? 0);
         $commission_rate = floatval($_POST['commission_rate'] ?? 0);
-        $status = $_POST['raffle_status'] ?? 'active';
         $auto_draw = isset($_POST['auto_draw']) ? 1 : 0;
         $allow_partial_sales = isset($_POST['allow_partial_sales']) ? 1 : 0;
         $max_tickets_per_user = intval($_POST['max_tickets_per_user'] ?? 50);
@@ -66,21 +73,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_settings'])) {
         $pdo->beginTransaction();
 
         try {
-            // Actualizar tabla raffles
-            $update_sql = "UPDATE raffles SET 
-                            ticket_price = ?, 
-                            commission_rate = ?, 
-                            status = ?, 
-                            updated_at = NOW() 
-                           WHERE id = ?";
+            // IMPORTANTE: NO modificamos la tabla raffles, solo raffle_committee
+            // La tabla raffles mantiene los precios originales del admin
             
-            executeQuery($update_sql, [
-                $ticket_price,
-                $commission_rate,
-                $status,
-                $rifa_id
-            ]);
-
             // Verificar si ya existe un registro en raffle_committee para esta rifa y comité
             $committee_check = fetchOne(
                 "SELECT id FROM raffle_committee WHERE raffle_id = ? AND committee_id = ? AND is_active = 1",
@@ -88,7 +83,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_settings'])) {
             );
 
             if ($committee_check) {
-                // Actualizar registro existente
+                // Actualizar registro existente en raffle_committee
                 $update_committee_sql = "UPDATE raffle_committee SET 
                                         ticket_price = ?, 
                                         commission_rate = ?, 
@@ -99,7 +94,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_settings'])) {
                 executeQuery($update_committee_sql, [
                     $ticket_price,
                     $commission_rate,
-                    $rifa_info['ticket_price'], // Guardar el precio original antes del cambio
+                    $rifa_info['ticket_price'], // Precio original del admin
                     $committee_check['id']
                 ]);
             } else {
@@ -113,21 +108,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_settings'])) {
                     $current_admin['id'],
                     $ticket_price,
                     $commission_rate,
-                    $rifa_info['ticket_price'] // Precio original
+                    $rifa_info['ticket_price'] // Precio original del admin
                 ]);
             }
 
             // Confirmar transacción
             $pdo->commit();
 
-            // Actualizar la información local para mostrar los cambios
-            $rifa_info['ticket_price'] = $ticket_price;
-            $rifa_info['commission_rate'] = $commission_rate;
-            $rifa_info['status'] = $status;
+            // Actualizar variables locales para mostrar los cambios en la interfaz
+            $current_ticket_price = $ticket_price;
+            $current_commission_rate = $commission_rate;
+            $rifa_info['committee_ticket_price'] = $ticket_price;
+            $rifa_info['committee_commission_rate'] = $commission_rate;
             
-            logAdminActivity('update_raffle_settings', "Actualizó configuración de rifa: {$rifa_info['name']} - Precio: $ticket_price, Comisión: {$commission_rate}%");
+            logAdminActivity('update_committee_pricing', "Actualizó precios del comité para rifa: {$rifa_info['name']} - Precio: $ticket_price, Comisión: {$commission_rate}% (Originales: {$rifa_info['ticket_price']}, {$rifa_info['commission_rate']}%)");
             
-            $success_message = 'Configuración actualizada correctamente';
+            $success_message = 'Configuración del comité actualizada correctamente. Los precios originales del admin se mantienen inalterados.';
 
         } catch (Exception $e) {
             $pdo->rollback();
@@ -136,7 +132,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_settings'])) {
         
     } catch (Exception $e) {
         $error_message = $e->getMessage();
-        error_log("Error al actualizar configuración: " . $e->getMessage());
+        error_log("Error al actualizar configuración del comité: " . $e->getMessage());
     }
 }
 ?>
@@ -145,481 +141,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_settings'])) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Configuración - <?php echo htmlspecialchars($rifa_info['name']); ?> - Rifas Online</title>
+    <title>Configuración del Comité - <?php echo htmlspecialchars($rifa_info['name']); ?> - Rifas Online</title>
     <meta name="robots" content="noindex, nofollow">
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #f8fafc;
-            min-height: 100vh;
-        }
-        
-        .settings-container {
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
-        
-        .header {
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            color: white;
-            padding: 1.5rem 2rem;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-        }
-        
-        .header-top {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1rem;
-        }
-        
-        .breadcrumb {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            font-size: 0.9rem;
-            opacity: 0.9;
-        }
-        
-        .breadcrumb a {
-            color: white;
-            text-decoration: none;
-            transition: opacity 0.3s ease;
-        }
-        
-        .breadcrumb a:hover {
-            opacity: 0.8;
-        }
-        
-        .header-title {
-            font-size: 1.8rem;
-            font-weight: 700;
-            margin: 0;
-        }
-        
-        .rifa-info {
-            background: rgba(255, 255, 255, 0.1);
-            padding: 1rem;
-            border-radius: 10px;
-            backdrop-filter: blur(10px);
-        }
-        
-        .rifa-name {
-            font-size: 1.2rem;
-            font-weight: 600;
-            margin-bottom: 0.5rem;
-        }
-        
-        .rifa-details {
-            display: flex;
-            gap: 2rem;
-            font-size: 0.9rem;
-            opacity: 0.9;
-        }
-        
-        .back-btn {
-            background: rgba(255, 255, 255, 0.2);
-            color: white;
-            border: none;
-            padding: 0.8rem 1.5rem;
-            border-radius: 25px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            text-decoration: none;
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-        
-        .back-btn:hover {
-            background: rgba(255, 255, 255, 0.3);
-            transform: translateY(-2px);
-            color: white;
-            text-decoration: none;
-        }
-        
-        .content {
-            flex: 1;
-            padding: 2rem;
-        }
-        
-        .settings-layout {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 2rem;
-            max-width: 1400px;
-            margin: 0 auto;
-        }
-        
-        .settings-section {
-            background: white;
-            border-radius: 15px;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
-            border: 1px solid #e2e8f0;
-            overflow: hidden;
-        }
-        
-        .section-header {
-            background: #f8fafc;
-            padding: 1.5rem 2rem;
-            border-bottom: 1px solid #e2e8f0;
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
-        
-        .section-icon {
-            width: 45px;
-            height: 45px;
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-        }
-        
-        .icon-general {
-            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
-        }
-        
-        .icon-sales {
-            background: linear-gradient(135deg, #10b981, #059669);
-        }
-        
-        .section-title {
-            font-size: 1.3rem;
-            font-weight: 700;
-            color: #1e293b;
-            margin: 0;
-        }
-        
-        .section-description {
-            font-size: 0.9rem;
-            color: #64748b;
-            margin-top: 0.3rem;
-        }
-        
-        .section-content {
-            padding: 2rem;
-        }
-        
-        .setting-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 1.5rem 0;
-            border-bottom: 1px solid #f1f5f9;
-        }
-        
-        .setting-item:last-child {
-            border-bottom: none;
-        }
-        
-        .setting-info {
-            flex: 1;
-        }
-        
-        .setting-label {
-            font-weight: 600;
-            color: #1e293b;
-            margin-bottom: 0.3rem;
-            font-size: 1rem;
-        }
-        
-        .setting-description {
-            font-size: 0.9rem;
-            color: #64748b;
-            line-height: 1.4;
-        }
-        
-        .setting-control {
-            margin-left: 2rem;
-        }
-        
-        /* Toggle Switch */
-        .toggle-switch {
-            position: relative;
-            display: inline-block;
-            width: 60px;
-            height: 34px;
-        }
-        
-        .toggle-switch input {
-            opacity: 0;
-            width: 0;
-            height: 0;
-        }
-        
-        .slider {
-            position: absolute;
-            cursor: pointer;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-color: #ccc;
-            transition: .4s;
-            border-radius: 34px;
-        }
-        
-        .slider:before {
-            position: absolute;
-            content: "";
-            height: 26px;
-            width: 26px;
-            left: 4px;
-            bottom: 4px;
-            background-color: white;
-            transition: .4s;
-            border-radius: 50%;
-        }
-        
-        input:checked + .slider {
-            background: linear-gradient(135deg, #667eea, #764ba2);
-        }
-        
-        input:checked + .slider:before {
-            transform: translateX(26px);
-        }
-        
-        /* Form Controls */
-        .form-group {
-            margin-bottom: 1.5rem;
-        }
-        
-        .form-label {
-            display: block;
-            font-weight: 600;
-            color: #1e293b;
-            margin-bottom: 0.5rem;
-            font-size: 0.9rem;
-        }
-        
-        .form-input,
-        .form-select {
-            width: 100%;
-            padding: 0.8rem 1rem;
-            border: 2px solid #e2e8f0;
-            border-radius: 8px;
-            font-size: 1rem;
-            transition: border-color 0.3s ease;
-        }
-        
-        .form-input:focus,
-        .form-select:focus {
-            outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-        }
-        
-        .input-group {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-        
-        .input-addon {
-            font-weight: 600;
-            color: #64748b;
-        }
-        
-        /* Buttons */
-        .btn {
-            padding: 0.8rem 1.5rem;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            border: none;
-            font-size: 0.9rem;
-        }
-        
-        .btn-primary {
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            color: white;
-        }
-        
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
-        }
-        
-        .btn-secondary {
-            background: #f8fafc;
-            color: #64748b;
-            border: 2px solid #e2e8f0;
-        }
-        
-        .btn-secondary:hover {
-            background: #f1f5f9;
-            border-color: #cbd5e1;
-        }
-        
-        .button-group {
-            display: flex;
-            gap: 1rem;
-            justify-content: flex-end;
-            margin-top: 2rem;
-            padding-top: 2rem;
-            border-top: 1px solid #f1f5f9;
-        }
-        
-        /* Status Badge */
-        .status-badge {
-            display: inline-block;
-            padding: 0.3rem 0.8rem;
-            border-radius: 15px;
-            font-size: 0.8rem;
-            font-weight: 600;
-            text-transform: uppercase;
-        }
-        
-        .status-active {
-            background: #dcfdf7;
-            color: #059669;
-        }
-        
-        .status-paused {
-            background: #fef3c7;
-            color: #d97706;
-        }
-        
-        .status-finished {
-            background: #fee2e2;
-            color: #dc2626;
-        }
-        
-        /* Alert Messages */
-        .alert {
-            padding: 1rem;
-            border-radius: 8px;
-            margin-bottom: 1.5rem;
-            display: flex;
-            align-items: center;
-            gap: 0.8rem;
-        }
-        
-        .alert-success {
-            background: #dcfdf7;
-            color: #059669;
-            border: 1px solid #a7f3d0;
-        }
-        
-        .alert-error {
-            background: #fef2f2;
-            color: #dc2626;
-            border: 1px solid #fecaca;
-        }
-        
-        .alert-icon {
-            width: 20px;
-            height: 20px;
-            flex-shrink: 0;
-        }
-        
-        /* Price/Commission Highlighting */
-        .price-highlight {
-            background: #eff6ff;
-            border: 2px solid #3b82f6;
-            border-radius: 8px;
-            padding: 1rem;
-            margin: 1rem 0;
-        }
-        
-        .price-highlight h4 {
-            color: #1e40af;
-            margin-bottom: 0.5rem;
-        }
-        
-        .price-highlight p {
-            color: #1e40af;
-            margin: 0;
-        }
-        
-        .commission-highlight {
-            background: #f0fdf4;
-            border: 2px solid #10b981;
-            border-radius: 8px;
-            padding: 1rem;
-            margin: 1rem 0;
-        }
-        
-        .commission-highlight h4 {
-            color: #059669;
-            margin-bottom: 0.5rem;
-        }
-        
-        .commission-highlight p {
-            color: #059669;
-            margin: 0;
-        }
-        
-        /* Update Notice */
-        .update-notice {
-            background: linear-gradient(135deg, #fbbf24, #f59e0b);
-            color: white;
-            padding: 1rem;
-            border-radius: 8px;
-            margin: 1rem 0;
-            font-weight: 600;
-            text-align: center;
-        }
-        
-        /* Responsive */
-        @media (max-width: 1024px) {
-            .settings-layout {
-                grid-template-columns: 1fr;
-            }
-        }
-        
-        @media (max-width: 768px) {
-            .content {
-                padding: 1rem;
-            }
-            
-            .header {
-                padding: 1rem;
-            }
-            
-            .header-top {
-                flex-direction: column;
-                gap: 1rem;
-                align-items: flex-start;
-            }
-            
-            .rifa-details {
-                flex-direction: column;
-                gap: 0.5rem;
-            }
-            
-            .section-content {
-                padding: 1.5rem;
-            }
-            
-            .setting-item {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 1rem;
-            }
-            
-            .setting-control {
-                margin-left: 0;
-                width: 100%;
-            }
-            
-            .button-group {
-                flex-direction: column;
-            }
-        }
-    </style>
+    <link rel="stylesheet" href="../assets/css/admin/settings_committee.css">
 </head>
 <body>
     <div class="settings-container">
@@ -629,9 +153,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_settings'])) {
                     <div class="breadcrumb">
                         <a href="panel.php">Panel</a>
                         <span>→</span>
-                        <span>Configuración</span>
+                        <span>Configuración del Comité</span>
                     </div>
-                    <h1 class="header-title">Configuración de Rifa</h1>
+                    <h1 class="header-title">Configuración Independiente del Comité</h1>
                 </div>
                 <a href="panel.php" class="back-btn">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -647,8 +171,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_settings'])) {
                 <div class="rifa-details">
                     <span>ID: #<?php echo $rifa_info['id']; ?></span>
                     <span>Estado: <span class="status-badge status-<?php echo $rifa_info['status']; ?>"><?php echo ucfirst($rifa_info['status']); ?></span></span>
-                    <span>Precio Actual: $<?php echo number_format($rifa_info['ticket_price'], 2); ?></span>
-                    <span>Comisión Actual: <?php echo number_format($rifa_info['commission_rate'], 1); ?>%</span>
                     <span>Sorteo: <?php echo date('d/m/Y H:i', strtotime($rifa_info['draw_date'])); ?></span>
                 </div>
             </div>
@@ -676,14 +198,121 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_settings'])) {
                 </div>
             <?php endif; ?>
 
-            <div class="update-notice">
-                🔄 Los cambios se guardarán en la tabla raffle_committee para el seguimiento del comité
+            <div class="independence-notice">
+                🔄 Sistema de Precios Independientes: Los cambios del comité NO afectan los precios originales del admin
+            </div>
+
+            <div class="schema-info">
+                <h5>📊 Información del Sistema</h5>
+                <p><strong>Tabla "raffles":</strong> Mantiene precios originales del admin intactos • <strong>Tabla "raffle_committee":</strong> Almacena solo tus personalizaciones</p>
+            </div>
+
+            <!-- Comparación de Precios -->
+            <div class="price-comparison">
+                <h4>💰 Comparación de Precios</h4>
+                <div class="comparison-row">
+                    <span class="comparison-label">Precio Original (Admin):</span>
+                    <span class="comparison-value original-price">$<?php echo number_format($rifa_info['ticket_price'], 2); ?></span>
+                </div>
+                <div class="comparison-row">
+                    <span class="comparison-label">Tu Precio Actual (Comité):</span>
+                    <span class="comparison-value committee-price">$<?php echo number_format($current_ticket_price, 2); ?></span>
+                </div>
+            </div>
+
+            <div class="commission-comparison">
+                <h4>📊 Comparación de Comisiones</h4>
+                <div class="comparison-row">
+                    <span class="comparison-label">Comisión Original (Admin):</span>
+                    <span class="comparison-value original-price"><?php echo number_format($rifa_info['commission_rate'], 1); ?>%</span>
+                </div>
+                <div class="comparison-row">
+                    <span class="comparison-label">Tu Comisión Actual (Comité):</span>
+                    <span class="comparison-value committee-price"><?php echo number_format($current_commission_rate, 1); ?>%</span>
+                </div>
             </div>
 
             <form id="settingsForm" method="POST">
                 <input type="hidden" name="update_settings" value="1">
                 
                 <div class="settings-layout">
+                    <!-- Configuración de Precios del Comité -->
+                    <div class="settings-section">
+                        <div class="section-header">
+                            <div class="section-icon icon-sales">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <line x1="12" y1="1" x2="12" y2="23"/>
+                                    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <h2 class="section-title">Precios del Comité</h2>
+                                <p class="section-description">Configuración independiente - NO afecta los precios del admin</p>
+                            </div>
+                        </div>
+                        
+                        <div class="section-content">
+                            <div class="alert alert-info">
+                                <svg class="alert-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="12" cy="12" r="10"/>
+                                    <path d="M12 16v-4"/>
+                                    <path d="M12 8h.01"/>
+                                </svg>
+                                <span>Los precios originales del admin (tabla "raffles") permanecen inalterados. Tus cambios se guardan en "raffle_committee".</span>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="form-label">Precio del Boleto del Comité</label>
+                                <div class="input-group">
+                                    <span class="input-addon">$</span>
+                                    <input type="number" name="ticket_price" class="form-input" style="width: 120px;" 
+                                           value="<?php echo $current_ticket_price; ?>" min="0.01" step="0.01" required>
+                                </div>
+                                <small style="color: #64748b; font-size: 0.8rem;">
+                                    Precio original del admin: $<?php echo number_format($rifa_info['ticket_price'], 2); ?> (no se modificará)
+                                </small>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="form-label">Comisión de Vendedores del Comité</label>
+                                <div class="input-group">
+                                    <input type="number" name="commission_rate" class="form-input" style="width: 100px;" 
+                                           value="<?php echo $current_commission_rate; ?>" min="0" max="50" step="0.1" required>
+                                    <span class="input-addon">%</span>
+                                </div>
+                                <small style="color: #64748b; font-size: 0.8rem;">
+                                    Comisión original del admin: <?php echo number_format($rifa_info['commission_rate'], 1); ?>% (no se modificará)
+                                </small>
+                            </div>
+                            
+                            <div class="setting-item">
+                                <div class="setting-info">
+                                    <div class="setting-label">Notificar Ventas a Vendedores</div>
+                                    <div class="setting-description">Enviar notificaciones cuando se realice una venta</div>
+                                </div>
+                                <div class="setting-control">
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" name="notify_sellers" checked>
+                                        <span class="slider"></span>
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <div class="setting-item">
+                                <div class="setting-info">
+                                    <div class="setting-label">Reporte de Ventas Diario</div>
+                                    <div class="setting-description">Generar reportes automáticos de ventas diarias</div>
+                                </div>
+                                <div class="setting-control">
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" name="daily_reports" checked>
+                                        <span class="slider"></span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <!-- Configuración General -->
                     <div class="settings-section">
                         <div class="section-header">
@@ -694,26 +323,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_settings'])) {
                                 </svg>
                             </div>
                             <div>
-                                <h2 class="section-title">Configuración General</h2>
-                                <p class="section-description">Ajustes básicos de la rifa</p>
+                                <h2 class="section-title">Configuración Operativa</h2>
+                                <p class="section-description">Ajustes de funcionamiento</p>
                             </div>
                         </div>
                         
                         <div class="section-content">
-                            <div class="setting-item">
-                                <div class="setting-info">
-                                    <div class="setting-label">Estado de la Rifa</div>
-                                    <div class="setting-description">Controla si la rifa está activa, pausada o finalizada</div>
-                                </div>
-                                <div class="setting-control">
-                                    <select name="raffle_status" class="form-select" style="width: 150px;">
-                                        <option value="active" <?php echo $rifa_info['status'] === 'active' ? 'selected' : ''; ?>>Activa</option>
-                                        <option value="paused" <?php echo $rifa_info['status'] === 'paused' ? 'selected' : ''; ?>>Pausada</option>
-                                        <option value="finished" <?php echo $rifa_info['status'] === 'finished' ? 'selected' : ''; ?>>Finalizada</option>
-                                    </select>
-                                </div>
-                            </div>
-                            
                             <div class="setting-item">
                                 <div class="setting-info">
                                     <div class="setting-label">Sorteo Automático</div>
@@ -747,83 +362,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_settings'])) {
                                     <span class="input-addon">boletos</span>
                                 </div>
                             </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Configuración de Ventas -->
-                    <div class="settings-section">
-                        <div class="section-header">
-                            <div class="section-icon icon-sales">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <line x1="12" y1="1" x2="12" y2="23"/>
-                                    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-                                </svg>
-                            </div>
-                            <div>
-                                <h2 class="section-title">Configuración de Ventas</h2>
-                                <p class="section-description">Precios y comisiones</p>
-                            </div>
-                        </div>
-                        
-                        <div class="section-content">
-                            <div class="price-highlight">
-                                <h4>💰 Precio del Boleto</h4>
-                                <p>Precio actual: $<?php echo number_format($rifa_info['ticket_price'], 2); ?></p>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label class="form-label">Nuevo Precio del Boleto</label>
-                                <div class="input-group">
-                                    <span class="input-addon">$</span>
-                                    <input type="number" name="ticket_price" class="form-input" style="width: 120px;" 
-                                           value="<?php echo $rifa_info['ticket_price']; ?>" min="0.01" step="0.01" required>
-                                </div>
-                                <small style="color: #64748b; font-size: 0.8rem;">
-                                    Este cambio se reflejará inmediatamente en todo el sistema y se guardará en raffle_committee
-                                </small>
-                            </div>
 
-                            <div class="commission-highlight">
-                                <h4>📊 Comisión de Vendedores</h4>
-                                <p>Comisión actual: <?php echo number_format($rifa_info['commission_rate'], 1); ?>%</p>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label class="form-label">Nueva Comisión de Vendedores</label>
-                                <div class="input-group">
-                                    <input type="number" name="commission_rate" class="form-input" style="width: 100px;" 
-                                           value="<?php echo $rifa_info['commission_rate']; ?>" min="0" max="50" step="0.1" required>
-                                    <span class="input-addon">%</span>
-                                </div>
-                                <small style="color: #64748b; font-size: 0.8rem;">
-                                    Entre 0% y 50%. Los vendedores verán este cambio inmediatamente
-                                </small>
-                            </div>
-                            
-                            <div class="setting-item">
-                                <div class="setting-info">
-                                    <div class="setting-label">Notificar Ventas a Vendedores</div>
-                                    <div class="setting-description">Enviar notificaciones cuando se realice una venta</div>
-                                </div>
-                                <div class="setting-control">
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" name="notify_sellers" checked>
-                                        <span class="slider"></span>
-                                    </label>
-                                </div>
-                            </div>
-                            
-                            <div class="setting-item">
-                                <div class="setting-info">
-                                    <div class="setting-label">Reporte de Ventas Diario</div>
-                                    <div class="setting-description">Generar reportes automáticos de ventas diarias</div>
-                                </div>
-                                <div class="setting-control">
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" name="daily_reports" checked>
-                                        <span class="slider"></span>
-                                    </label>
-                                </div>
+                            <!-- Información técnica -->
+                            <div class="schema-info">
+                                <h5>🔧 Arquitectura de Datos</h5>
+                                <p><strong>raffles.ticket_price:</strong> $<?php echo number_format($rifa_info['ticket_price'], 2); ?> (inmutable por comité)</p>
+                                <p><strong>raffles.commission_rate:</strong> <?php echo number_format($rifa_info['commission_rate'], 1); ?>% (inmutable por comité)</p>
+                                <p><strong>raffle_committee.ticket_price:</strong> $<?php echo number_format($current_ticket_price, 2); ?> (editable)</p>
+                                <p><strong>raffle_committee.commission_rate:</strong> <?php echo number_format($current_commission_rate, 1); ?>% (editable)</p>
                             </div>
                         </div>
                     </div>
@@ -843,7 +389,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_settings'])) {
                                     <polyline points="17,21 17,13 7,13 7,21"/>
                                     <polyline points="7,3 7,8 15,8"/>
                                 </svg>
-                                Guardar Cambios
+                                Guardar Solo en Raffle_Committee
                             </button>
                         </div>
                     </div>
@@ -853,14 +399,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_settings'])) {
     </div>
     
     <script>
-        // Preview de cambios
+        // Preview de cambios sin afectar precios originales
         function previewPriceChange() {
             const newPrice = document.querySelector('input[name="ticket_price"]').value;
             const commission = document.querySelector('input[name="commission_rate"]').value;
+            const originalPrice = <?php echo $rifa_info['ticket_price']; ?>;
+            const originalCommission = <?php echo $rifa_info['commission_rate']; ?>;
             
             if (newPrice && commission) {
                 const commissionAmount = (newPrice * commission / 100).toFixed(2);
-                console.log(`Nuevo precio: $${newPrice}, Comisión: ${commission}% ($${commissionAmount})`);
+                console.log(`Precios independientes:
+                    Admin (original): $${originalPrice} (${originalCommission}%)
+                    Comité (nuevo): $${newPrice} (${commission}%) - Comisión: $${commissionAmount}`);
             }
         }
         
@@ -870,27 +420,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_settings'])) {
         
         // Confirmar cambios importantes
         document.getElementById('settingsForm').addEventListener('submit', function(e) {
-            const currentPrice = <?php echo $rifa_info['ticket_price']; ?>;
-            const currentCommission = <?php echo $rifa_info['commission_rate']; ?>;
+            const originalPrice = <?php echo $rifa_info['ticket_price']; ?>;
+            const originalCommission = <?php echo $rifa_info['commission_rate']; ?>;
             const newPrice = parseFloat(document.querySelector('input[name="ticket_price"]').value);
             const newCommission = parseFloat(document.querySelector('input[name="commission_rate"]').value);
             
             let changes = [];
-            if (newPrice !== currentPrice) {
-                changes.push(`Precio: $${currentPrice} → $${newPrice}`);
-            }
-            if (newCommission !== currentCommission) {
-                changes.push(`Comisión: ${currentCommission}% → ${newCommission}%`);
-            }
+            changes.push(`COMITÉ - Precio: $${newPrice} (Original admin: $${originalPrice})`);
+            changes.push(`COMITÉ - Comisión: ${newCommission}% (Original admin: ${originalCommission}%)`);
             
-            if (changes.length > 0) {
-                const confirm = window.confirm(
-                    `¿Estás seguro de realizar estos cambios?\n\n${changes.join('\n')}\n\nEstos cambios se aplicarán inmediatamente y se guardarán en raffle_committee.`
-                );
-                
-                if (!confirm) {
-                    e.preventDefault();
-                }
+            const confirm = window.confirm(
+                `¿Confirmar cambios del comité?\n\n${changes.join('\n')}\n\n✅ Los precios originales del admin NO se modificarán\n✅ Cambios se guardan solo en raffle_committee`
+            );
+            
+            if (!confirm) {
+                e.preventDefault();
             }
         });
     </script>
