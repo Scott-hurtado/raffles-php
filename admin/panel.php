@@ -177,156 +177,774 @@ try {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Panel de <?php echo ucfirst($current_admin['user_type']); ?> - Rifas Online</title>
-    <link rel="stylesheet" href="../assets/css/admin/admin_login.css">
     <meta name="robots" content="noindex, nofollow">
-    <link rel="stylesheet" href="../assets/css/admin/panel.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #ffffff;
+            color: #1f2937;
+            line-height: 1.6;
+        }
+
+        /* Header Unificado */
+        .main-header {
+            background: #ffffff;
+            border-bottom: 1px solid #e5e7eb;
+            padding: 1.5rem 2rem;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .user-avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 700;
+            font-size: 1.2rem;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+        }
+
+        .header-info h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #111827;
+            margin-bottom: 0.25rem;
+        }
+
+        .user-role {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .role-admin {
+            background: linear-gradient(135deg, #dc2626, #b91c1c);
+            color: white;
+        }
+
+        .role-committee {
+            background: linear-gradient(135deg, #7c3aed, #6d28d9);
+            color: white;
+        }
+
+        .role-seller {
+            background: linear-gradient(135deg, #059669, #047857);
+            color: white;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .notifications-btn {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            border: 1px solid #e5e7eb;
+            background: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            color: #6b7280;
+            position: relative;
+        }
+
+        .notifications-btn:hover {
+            background: #f9fafb;
+            color: #374151;
+            border-color: #d1d5db;
+        }
+
+        .notifications-btn .badge {
+            position: absolute;
+            top: -2px;
+            right: -2px;
+            width: 8px;
+            height: 8px;
+            background: #ef4444;
+            border-radius: 50%;
+        }
+
+        .logout-btn {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.25rem;
+            background: #f3f4f6;
+            color: #6b7280;
+            border: 1px solid #d1d5db;
+            border-radius: 12px;
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+        .logout-btn:hover {
+            background: #ef4444;
+            color: white;
+            border-color: #ef4444;
+            transform: translateY(-1px);
+            text-decoration: none;
+        }
+
+        /* Contenido Principal */
+        .main-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        /* Stats Cards */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 16px;
+            padding: 1.5rem;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: var(--card-color);
+            opacity: 0.8;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            border-color: var(--card-color);
+        }
+
+        .stat-card.stat-rifas { --card-color: #3b82f6; }
+        .stat-card.stat-revenue { --card-color: #10b981; }
+        .stat-card.stat-sales { --card-color: #f59e0b; }
+        .stat-card.stat-commissions { --card-color: #8b5cf6; }
+        .stat-card.stat-tickets { --card-color: #ef4444; }
+
+        .stat-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .stat-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            background: var(--card-color);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .stat-icon i {
+            font-size: 1.2rem;
+        }
+
+        .stat-title {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-number {
+            font-size: 2.2rem;
+            font-weight: 800;
+            color: #111827;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-change {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+
+        .stat-change.positive {
+            color: #059669;
+        }
+
+        .stat-change.negative {
+            color: #dc2626;
+        }
+
+        /* Main Content Section */
+        .content-section {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 16px;
+            overflow: hidden;
+        }
+
+        .section-header {
+            padding: 1.5rem 2rem;
+            border-bottom: 1px solid #e5e7eb;
+            background: #fafbfc;
+            display: flex;
+            justify-content: between;
+            align-items: center;
+        }
+
+        .section-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #111827;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .section-title i {
+            color: #6b7280;
+        }
+
+        .primary-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-decoration: none;
+        }
+
+        .primary-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 20px rgba(59, 130, 246, 0.3);
+            color: white;
+            text-decoration: none;
+        }
+
+        /* Tabla Moderna */
+        .modern-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+        }
+
+        .modern-table thead th {
+            background: #f9fafb;
+            padding: 1rem 1.5rem;
+            font-weight: 600;
+            color: #374151;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid #e5e7eb;
+            text-align: left;
+        }
+
+        .modern-table tbody tr {
+            transition: background-color 0.2s ease;
+        }
+
+        .modern-table tbody tr:hover {
+            background: #f9fafb;
+        }
+
+        .modern-table tbody td {
+            padding: 1.25rem 1.5rem;
+            border-bottom: 1px solid #f3f4f6;
+            vertical-align: top;
+        }
+
+        .raffle-cell {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .raffle-image {
+            width: 48px;
+            height: 48px;
+            border-radius: 10px;
+            object-fit: cover;
+            border: 1px solid #e5e7eb;
+        }
+
+        .raffle-info h4 {
+            font-weight: 600;
+            color: #111827;
+            margin-bottom: 0.25rem;
+        }
+
+        .raffle-meta {
+            font-size: 0.85rem;
+            color: #6b7280;
+        }
+
+        .price-display {
+            font-weight: 700;
+            color: #059669;
+            font-size: 1.1rem;
+        }
+
+        .commission-info {
+            color: #7c3aed;
+            font-weight: 600;
+        }
+
+        .progress-container {
+            min-width: 120px;
+        }
+
+        .progress-text {
+            font-size: 0.85rem;
+            color: #6b7280;
+            margin-bottom: 0.5rem;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: #e5e7eb;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(135deg, #10b981, #059669);
+            border-radius: 10px;
+            transition: width 0.3s ease;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-active {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .status-paused {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .status-finished {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        /* Action Buttons */
+        .action-buttons {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .action-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+            background: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            color: #6b7280;
+        }
+
+        .action-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            color: #374151;
+            border-color: #d1d5db;
+        }
+
+        .action-btn.primary {
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            color: white;
+            border-color: #3b82f6;
+        }
+
+        .action-btn.primary:hover {
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+        }
+
+        .action-btn.success {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+            border-color: #10b981;
+        }
+
+        .action-btn.warning {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: white;
+            border-color: #f59e0b;
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: #6b7280;
+        }
+
+        .empty-state i {
+            font-size: 3rem;
+            color: #d1d5db;
+            margin-bottom: 1rem;
+        }
+
+        .empty-state h3 {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 0.5rem;
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .main-container {
+                padding: 1rem;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .header-content {
+                flex-direction: column;
+                gap: 1rem;
+                text-align: center;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .modern-table {
+                font-size: 0.9rem;
+            }
+
+            .modern-table thead th,
+            .modern-table tbody td {
+                padding: 0.75rem;
+            }
+
+            .raffle-cell {
+                flex-direction: column;
+                text-align: center;
+                gap: 0.5rem;
+            }
+
+            .action-buttons {
+                justify-content: center;
+                flex-wrap: wrap;
+            }
+
+            .section-header {
+                flex-direction: column;
+                gap: 1rem;
+            }
+        }
+
+        /* Committee & Seller specific styles */
+        .committee-specific .user-avatar {
+            background: linear-gradient(135deg, #7c3aed, #6d28d9);
+        }
+
+        .seller-specific .user-avatar {
+            background: linear-gradient(135deg, #059669, #047857);
+        }
+
+        .feature-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0.25rem 0.5rem;
+            background: #fef3c7;
+            color: #92400e;
+            border-radius: 6px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .updated-indicator {
+            background: #dbeafe;
+            color: #1d4ed8;
+        }
+
+        .committee-pricing {
+            background: #d1fae5;
+            color: #065f46;
+        }
+    </style>
 </head>
-<body>
-    <?php if ($current_admin['user_type'] === 'admin'): ?>
-    <!-- Vista Admin -->
-    <div class="admin-panel">
-        <div class="panel-container">
-            <!-- Header -->
-            <div class="panel-header">
-                <div class="welcome-info">
-                    <h1>Panel de Administración</h1>
-                    <p>Bienvenido, <?php echo htmlspecialchars($current_admin['username']); ?></p>
+<body class="<?php echo $current_admin['user_type']; ?>-specific">
+    <!-- Header Unificado -->
+    <header class="main-header">
+        <div class="header-content">
+            <div class="header-left">
+                <div class="user-avatar">
+                    <?php echo strtoupper(substr($current_admin['username'], 0, 1)); ?>
                 </div>
-                <div class="admin-info">
-                    <div class="admin-badge"><?php echo htmlspecialchars($current_admin['user_type']); ?></div>
-                    <div class="admin-details">
-                        <?php echo htmlspecialchars($current_admin['email']); ?><br>
-                        Última sesión: <?php echo date('d/m/Y H:i', $current_admin['login_time']); ?>
-                    </div>
-                    <div style="margin-top: 1rem;">
-                        <a href="?logout=1" class="logout-btn" onclick="return confirm('¿Estás seguro de que deseas cerrar sesión?')">
-                            <i class="fas fa-sign-out-alt"></i>
-                            Cerrar Sesión
-                        </a>
+                <div class="header-info">
+                    <h1>Panel de Control</h1>
+                    <div class="user-role role-<?php echo $current_admin['user_type']; ?>">
+                        <i class="fas fa-<?php echo $current_admin['user_type'] === 'admin' ? 'crown' : ($current_admin['user_type'] === 'committee' ? 'users' : 'user-tie'); ?>"></i>
+                        <?php echo ucfirst($current_admin['user_type']); ?>
                     </div>
                 </div>
             </div>
-            
-            <!-- Estadísticas rápidas actualizadas -->
-            <div class="stats-row">
-                <div class="stat-card">
-                    <div class="stat-number"><?php echo $stats['active_raffles']; ?></div>
-                    <div class="stat-label">Rifas Activas</div>
+            <div class="header-right">
+                <button class="notifications-btn">
+                    <i class="fas fa-bell"></i>
+                    <span class="badge"></span>
+                </button>
+                <a href="?logout=1" class="logout-btn" onclick="return confirm('¿Estás seguro de que deseas cerrar sesión?')">
+                    <i class="fas fa-sign-out-alt"></i>
+                    Cerrar Sesión
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <!-- Contenido Principal -->
+    <main class="main-container">
+        <!-- Estadísticas -->
+        <div class="stats-grid">
+            <div class="stat-card stat-rifas">
+                <div class="stat-header">
+                    <div class="stat-icon">
+                        <i class="fas fa-gift"></i>
+                    </div>
+                    <div class="stat-title">Rifas Activas</div>
                 </div>
-                <div class="stat-card">
-                    <div class="stat-number">$<?php echo number_format($stats['total_revenue'], 0); ?></div>
-                    <div class="stat-label">Revenue Total</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number">$<?php echo number_format($stats['monthly_sales'], 0); ?></div>
-                    <div class="stat-label">Ventas del Mes</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number">$<?php echo number_format($stats['total_commissions'], 0); ?></div>
-                    <div class="stat-label">Comisiones Totales</div>
+                <div class="stat-number"><?php echo number_format($stats['active_raffles']); ?></div>
+                <div class="stat-change positive">
+                    <i class="fas fa-arrow-up"></i>
+                    +2 esta semana
                 </div>
             </div>
-            
-            <!-- Contenido principal - Tabla de rifas -->
-            <div class="admin-content">
-                <div class="rifas-table-container">
-                    <div class="table-header">
-                        <h2 class="table-title">Gestión de Rifas</h2>
-                        <button class="create-rifa-btn" onclick="createNewRifa()">
+
+            <div class="stat-card stat-revenue">
+                <div class="stat-header">
+                    <div class="stat-icon">
+                        <i class="fas fa-dollar-sign"></i>
+                    </div>
+                    <div class="stat-title">Revenue Total</div>
+                </div>
+                <div class="stat-number">$<?php echo number_format($stats['total_revenue'], 0); ?></div>
+                <div class="stat-change positive">
+                    <i class="fas fa-arrow-up"></i>
+                    +12% vs mes anterior
+                </div>
+            </div>
+
+            <div class="stat-card stat-sales">
+                <div class="stat-header">
+                    <div class="stat-icon">
+                        <i class="fas fa-chart-line"></i>
+                    </div>
+                    <div class="stat-title">Ventas del Mes</div>
+                </div>
+                <div class="stat-number">$<?php echo number_format($stats['monthly_sales'], 0); ?></div>
+                <div class="stat-change positive">
+                    <i class="fas fa-arrow-up"></i>
+                    +8% vs mes anterior
+                </div>
+            </div>
+
+            <div class="stat-card stat-commissions">
+                <div class="stat-header">
+                    <div class="stat-icon">
+                        <i class="fas fa-percentage"></i>
+                    </div>
+                    <div class="stat-title"><?php echo $current_admin['user_type'] === 'seller' ? 'Mis Comisiones' : 'Comisiones Totales'; ?></div>
+                </div>
+                <div class="stat-number">$<?php echo number_format($stats['total_commissions'], 0); ?></div>
+                <div class="stat-change positive">
+                    <i class="fas fa-arrow-up"></i>
+                    +15% vs mes anterior
+                </div>
+            </div>
+        </div>
+
+        <!-- Gestión de Rifas -->
+        <div class="content-section">
+            <div class="section-header">
+                <h2 class="section-title">
+                    <i class="fas fa-list"></i>
+                    Gestión de Rifas
+                </h2>
+                <?php if ($current_admin['user_type'] === 'admin' || $current_admin['user_type'] === 'committee'): ?>
+                <a href="admin_create_raffle.php" class="primary-btn">
+                    <i class="fas fa-plus"></i>
+                    Nueva Rifa
+                </a>
+                <?php endif; ?>
+            </div>
+
+            <?php if (empty($rifas_data)): ?>
+                <div class="empty-state">
+                    <i class="fas fa-gift"></i>
+                    <h3>No hay rifas disponibles</h3>
+                    <p>Comienza creando tu primera rifa</p>
+                    <?php if ($current_admin['user_type'] === 'admin'): ?>
+                        <a href="admin_create_raffle.php" class="primary-btn" style="margin-top: 1rem;">
                             <i class="fas fa-plus"></i>
                             Crear Nueva Rifa
-                        </button>
-                    </div>
-                    
-                    <?php if (empty($rifas_data)): ?>
-                    <div style="padding: 3rem; text-align: center; color: #6b7280;">
-                        <i class="fas fa-gift" style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.5;"></i>
-                        <h3 style="margin-bottom: 0.5rem;">No hay rifas creadas</h3>
-                        <p>Comienza creando tu primera rifa haciendo clic en "Crear Nueva Rifa"</p>
-                    </div>
-                    <?php else: ?>
-                    <table class="rifas-table">
-                        <thead>
-                            <tr>
-                                <th>Rifa</th>
-                                <th>Fecha de Sorteo</th>
-                                <th>Precio & Comisión</th>
-                                <th>Progreso de Venta</th>
-                                <th>Revenue</th>
-                                <th>Estado</th>
-                                <th>Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($rifas_data as $rifa): ?>
+                        </a>
+                    <?php endif; ?>
+                </div>
+            <?php else: ?>
+                <table class="modern-table">
+                    <thead>
+                        <tr>
+                            <th>Rifa</th>
+                            <th>Precio & Comisión</th>
+                            <th>Progreso</th>
+                            <th>Revenue</th>
+                            <th>Estado</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($rifas_data as $rifa): ?>
                             <?php 
                                 $progress_percentage = $rifa['total_tickets'] > 0 ? ($rifa['sold_tickets'] / $rifa['total_tickets']) * 100 : 0;
                                 $is_expired = strtotime($rifa['draw_date']) < time();
+                                
+                                // Determinar imagen
+                                $image_url = 'https://images.unsplash.com/photo-1558618047-3c8c76ca7d13?w=100&h=100&fit=crop&crop=center';
+                                if (!empty($rifa['images_array'])) {
+                                    $image_url = '../uploads/raffles/' . $rifa['images_array'][0];
+                                }
                             ?>
                             <tr>
                                 <td>
-                                    <div class="rifa-name"><?php echo htmlspecialchars($rifa['name']); ?></div>
-                                    <div class="rifa-date">
-                                        ID: #<?php echo $rifa['id']; ?>
-                                        <?php if ($rifa['days_remaining'] >= 0 && !$is_expired): ?>
-                                            • <?php echo $rifa['days_remaining']; ?> días restantes
-                                        <?php elseif ($is_expired && $rifa['status'] !== 'finished'): ?>
-                                            • <span style="color: #ef4444;">Vencida</span>
-                                        <?php endif; ?>
+                                    <div class="raffle-cell">
+                                        <img src="<?php echo $image_url; ?>" alt="<?php echo htmlspecialchars($rifa['name']); ?>" class="raffle-image">
+                                        <div class="raffle-info">
+                                            <h4><?php echo htmlspecialchars($rifa['name']); ?></h4>
+                                            <div class="raffle-meta">
+                                                ID: #<?php echo $rifa['id']; ?> • 
+                                                <?php echo $rifa['formatted_date']; ?>
+                                                <?php if ($rifa['days_remaining'] >= 0 && !$is_expired): ?>
+                                                    • <?php echo $rifa['days_remaining']; ?> días
+                                                <?php elseif ($is_expired && $rifa['status'] !== 'finished'): ?>
+                                                    • <span style="color: #ef4444;">Vencida</span>
+                                                <?php endif; ?>
+                                            </div>
+                                        </div>
                                     </div>
                                 </td>
                                 <td>
-                                    <div class="rifa-date">
-                                        <?php echo $rifa['formatted_date']; ?>
-                                        <?php if ($is_expired && $rifa['status'] !== 'finished'): ?>
-                                            <br><small style="color: #ef4444;">Requiere sorteo</small>
-                                        <?php endif; ?>
-                                    </div>
-                                </td>
-                                <td>
-                                    <div class="rifa-price">$<?php echo number_format($rifa['display_ticket_price'], 2); ?></div>
-                                    <div style="font-size: 0.8rem; color: #6b7280;">
-                                        Comisión: <?php echo number_format($rifa['display_commission_rate'], 1); ?>%
-                                    </div>
-                                    <div style="font-size: 0.8rem; color: #059669; font-weight: 600;">
-                                        $<?php echo number_format($rifa['display_ticket_price'] * ($rifa['display_commission_rate'] / 100), 2); ?> por boleto
-                                    </div>
-                                    <?php if (strtotime($rifa['updated_at']) > strtotime('-1 hour')): ?>
-                                        <div style="font-size: 0.7rem; color: #f59e0b; font-weight: 600;">
-                                            🔄 Actualizado recientemente
+                                    <div class="price-display">$<?php echo number_format($rifa['display_ticket_price'], 2); ?></div>
+                                    <div class="commission-info"><?php echo number_format($rifa['display_commission_rate'], 1); ?>% comisión</div>
+                                    <?php if ($current_admin['user_type'] === 'committee' && isset($rifa['has_committee_changes']) && $rifa['has_committee_changes']): ?>
+                                        <div class="feature-badge committee-pricing">
+                                            <i class="fas fa-users"></i>
+                                            Personalizado
+                                        </div>
+                                    <?php endif; ?>
+                                    <?php if (isset($rifa['recently_updated_by_committee']) && $rifa['recently_updated_by_committee']): ?>
+                                        <div class="feature-badge updated-indicator">
+                                            <i class="fas fa-clock"></i>
+                                            Actualizado
                                         </div>
                                     <?php endif; ?>
                                 </td>
                                 <td>
-                                    <div class="rifa-progress">
+                                    <div class="progress-container">
                                         <div class="progress-text">
-                                            <?php echo number_format($rifa['sold_tickets']); ?> / <?php echo number_format($rifa['total_tickets']); ?> 
+                                            <?php echo number_format($rifa['sold_tickets']); ?>/<?php echo number_format($rifa['total_tickets']); ?> 
                                             (<?php echo number_format($progress_percentage, 1); ?>%)
                                         </div>
                                         <div class="progress-bar">
-                                            <div class="progress-fill" style="width: <?php echo $progress_percentage; ?>%"></div>
+                                            <div class="progress-fill" style="width: <?php echo min($progress_percentage, 100); ?>%"></div>
                                         </div>
-                                        <?php if ($progress_percentage >= 100): ?>
-                                            <div style="font-size: 0.8rem; color: #059669; font-weight: 600; margin-top: 0.3rem;">
-                                                ¡Agotada!
-                                            </div>
-                                        <?php endif; ?>
                                     </div>
                                 </td>
                                 <td>
-                                    <div style="font-weight: 600; color: #059669; font-size: 1rem;">
-                                        $<?php echo number_format($rifa['current_revenue'], 0); ?>
-                                    </div>
-                                    <div style="font-size: 0.8rem; color: #6b7280;">
+                                    <div class="price-display">$<?php echo number_format($rifa['current_revenue'], 0); ?></div>
+                                    <div style="font-size: 0.85rem; color: #6b7280;">
                                         de $<?php echo number_format($rifa['potential_revenue'], 0); ?>
                                     </div>
-                                    <div style="font-size: 0.8rem; color: #f59e0b; font-weight: 600;">
-                                        Comisiones: $<?php echo number_format($rifa['total_commission'], 0); ?>
-                                    </div>
                                 </td>
                                 <td>
-                                    <span class="rifa-status status-<?php echo $rifa['status']; ?>">
+                                    <div class="status-badge status-<?php echo $rifa['status']; ?>">
+                                        <i class="fas fa-<?php echo $rifa['status'] === 'active' ? 'check-circle' : ($rifa['status'] === 'paused' ? 'pause-circle' : 'times-circle'); ?>"></i>
                                         <?php 
                                             $status_labels = [
                                                 'active' => 'Activa',
@@ -336,454 +954,47 @@ try {
                                             ];
                                             echo $status_labels[$rifa['status']] ?? ucfirst($rifa['status']);
                                         ?>
-                                    </span>
-                                    <?php if ($rifa['draw_completed']): ?>
-                                        <div style="font-size: 0.8rem; color: #059669; margin-top: 0.3rem;">
-                                            <i class="fas fa-trophy"></i> Sorteada
-                                        </div>
-                                    <?php endif; ?>
+                                    </div>
                                 </td>
                                 <td>
-                                    <div class="rifa-actions">
-                                        <button class="action-btn btn-users" 
-                                                data-tooltip="Gestionar Usuarios"
-                                                onclick="manageUsers(<?php echo $rifa['id']; ?>)">
-                                            <i class="fas fa-users"></i>
-                                        </button>
-                                        
-                                        <?php if (!$rifa['draw_completed'] && ($is_expired || $progress_percentage >= 100)): ?>
-                                        <button class="action-btn btn-draw" 
-                                                data-tooltip="Lanzar Sorteo"
-                                                onclick="launchDraw(<?php echo $rifa['id']; ?>)"
-                                                style="background: #fbbf24; color: white; border-color: #fbbf24;">
-                                            <i class="fas fa-trophy"></i>
-                                        </button>
-                                        <?php else: ?>
-                                        <button class="action-btn btn-draw" 
-                                                data-tooltip="Lanzar Sorteo"
-                                                onclick="launchDraw(<?php echo $rifa['id']; ?>)">
-                                            <i class="fas fa-trophy"></i>
-                                        </button>
-                                        <?php endif; ?>
-                                        
-                                        <button class="action-btn btn-payments" 
-                                                data-tooltip="Gestionar Pagos"
-                                                onclick="managePayments(<?php echo $rifa['id']; ?>)">
-                                            <i class="fas fa-credit-card"></i>
-                                        </button>
-                                        
-                                        <button class="action-btn btn-reports" 
-                                                data-tooltip="Ver Reportes"
-                                                onclick="viewReports(<?php echo $rifa['id']; ?>)">
-                                            <i class="fas fa-chart-bar"></i>
-                                        </button>
-                                        
-                                        <button class="action-btn btn-settings" 
-                                                data-tooltip="Configuración"
-                                                onclick="rifaSettings(<?php echo $rifa['id']; ?>)">
-                                            <i class="fas fa-cog"></i>
-                                        </button>
-                                        
-                                        <div class="status-menu-container">
-                                            <button class="action-btn btn-status-menu" 
-                                                    data-tooltip="Cambiar Estado"
-                                                    onclick="toggleStatusMenu(<?php echo $rifa['id']; ?>)">
-                                                <i class="fas fa-ellipsis-h"></i>
+                                    <div class="action-buttons">
+                                        <?php if ($current_admin['user_type'] === 'admin'): ?>
+                                            <button class="action-btn primary" title="Gestionar Usuarios" onclick="manageUsers(<?php echo $rifa['id']; ?>)">
+                                                <i class="fas fa-users"></i>
                                             </button>
-                                            
-                                            <div class="status-dropdown" id="statusMenu-<?php echo $rifa['id']; ?>">
-                                                <div class="status-option active" 
-                                                     onclick="changeRifaStatus(<?php echo $rifa['id']; ?>, 'active')">
-                                                    <div class="status-dot status-dot-active"></div>
-                                                    Activa
-                                                </div>
-                                                <div class="status-option paused" 
-                                                     onclick="changeRifaStatus(<?php echo $rifa['id']; ?>, 'paused')">
-                                                    <div class="status-dot status-dot-paused"></div>
-                                                    Pausada
-                                                </div>
-                                                <div class="status-option finished" 
-                                                     onclick="changeRifaStatus(<?php echo $rifa['id']; ?>, 'finished')">
-                                                    <div class="status-dot status-dot-finished"></div>
-                                                    Finalizada
-                                                </div>
-                                                <div class="status-option cancelled" 
-                                                     onclick="changeRifaStatus(<?php echo $rifa['id']; ?>, 'cancelled')">
-                                                    <div class="status-dot status-dot-cancelled"></div>
-                                                    Cancelada
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </td>
-                            </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                    <?php endif; ?>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <?php elseif ($current_admin['user_type'] === 'committee'): ?>
-    <!-- Vista Committee -->
-    <div class="committee-panel">
-        <div class="panel-container">
-            <!-- Header Committee -->
-            <div class="committee-header">
-                <div style="flex: 1;">
-                    <div class="committee-header-top">
-                        <div>
-                            <div class="breadcrumb">
-                                <span>Panel</span>
-                            </div>
-                            <h1 class="committee-title">Panel de Comité</h1>
-                        </div>
-                        <div class="committee-user-info">
-                            <div class="committee-avatar">
-                                <?php echo strtoupper(substr($current_admin['username'], 0, 1)); ?>
-                            </div>
-                            <div class="committee-details">
-                                <div class="committee-name"><?php echo htmlspecialchars($current_admin['username']); ?></div>
-                                <div class="committee-type"><?php echo ucfirst($current_admin['user_type']); ?></div>
-                            </div>
-                            <a href="?logout=1" class="logout-btn" onclick="return confirm('¿Estás seguro de que deseas cerrar sesión?')">
-                                <i class="fas fa-sign-out-alt"></i>
-                                Cerrar Sesión
-                            </a>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Content Committee -->
-            <div class="committee-content">
-                <!-- Estadísticas -->
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-header">
-                            <div class="stat-icon icon-rifas">
-                                <i class="fas fa-gift"></i>
-                            </div>
-                        </div>
-                        <div class="stat-number"><?php echo $stats['active_raffles']; ?></div>
-                        <div class="stat-label">Rifas Activas</div>
-                    </div>
-                    
-                    <div class="stat-card">
-                        <div class="stat-header">
-                            <div class="stat-icon icon-active">
-                                <i class="fas fa-dollar-sign"></i>
-                            </div>
-                        </div>
-                        <div class="stat-number">$<?php echo number_format($stats['total_revenue'], 0); ?></div>
-                        <div class="stat-label">Revenue Total (Con tus precios)</div>
-                    </div>
-                    
-                    <div class="stat-card">
-                        <div class="stat-header">
-                            <div class="stat-icon icon-sales">
-                                <i class="fas fa-percentage"></i>
-                            </div>
-                        </div>
-                        <div class="stat-number">$<?php echo number_format($stats['total_commissions'], 0); ?></div>
-                        <div class="stat-label">Comisiones (Con tus tasas)</div>
-                    </div>
-                </div>
-                
-                <!-- Tabla de rifas para committee con información actualizada -->
-                <div class="rifas-table-container">
-                    <div class="table-header">
-                        <h2 class="table-title">Gestión de Rifas</h2>
-                        <button class="create-rifa-btn" onclick="createNewRifa()">
-                            <i class="fas fa-plus"></i>
-                            Crear Nueva Rifa
-                        </button>
-                    </div>
-                    
-                    <?php if (!empty($rifas_data)): ?>
-                    <table class="rifas-table">
-                        <thead>
-                            <tr>
-                                <th>Rifa</th>
-                                <th>Precio & Comisión</th>
-                                <th>Progreso de Venta</th>
-                                <th>Revenue</th>
-                                <th>Estado</th>
-                                <th>Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($rifas_data as $rifa): ?>
-                            <?php 
-                                $progress_percentage = $rifa['total_tickets'] > 0 ? ($rifa['sold_tickets'] / $rifa['total_tickets']) * 100 : 0;
-                                $has_custom_pricing = isset($rifa['committee_ticket_price']) || isset($rifa['committee_commission_rate']);
-                            ?>
-                            <tr>
-                                <td>
-                                    <div class="rifa-name"><?php echo htmlspecialchars($rifa['name']); ?></div>
-                                    <div class="rifa-date">
-                                        ID: #<?php echo $rifa['id']; ?> • <?php echo $rifa['formatted_date']; ?>
-                                    </div>
-                                </td>
-                                <td>
-                                    <div class="rifa-price">
-                                        $<?php echo number_format($rifa['display_ticket_price'], 2); ?>
-                                        <?php if ($has_custom_pricing && $rifa['display_ticket_price'] != $rifa['ticket_price']): ?>
-                                            <small style="color: #10b981; font-weight: 600;">(Personalizado)</small>
+                                            <button class="action-btn warning" title="Lanzar Sorteo" onclick="launchDraw(<?php echo $rifa['id']; ?>)">
+                                                <i class="fas fa-trophy"></i>
+                                            </button>
+                                            <button class="action-btn success" title="Ver Reportes" onclick="viewReports(<?php echo $rifa['id']; ?>)">
+                                                <i class="fas fa-chart-bar"></i>
+                                            </button>
+                                        <?php elseif ($current_admin['user_type'] === 'committee'): ?>
+                                            <button class="action-btn primary" title="Vendedores" onclick="window.location.href='sellers.php?rifa_id=<?php echo $rifa['id']; ?>'">
+                                                <i class="fas fa-user-tie"></i>
+                                            </button>
+                                            <button class="action-btn success" title="Contabilidad" onclick="window.location.href='accounting.php?rifa_id=<?php echo $rifa['id']; ?>'">
+                                                <i class="fas fa-calculator"></i>
+                                            </button>
+                                            <button class="action-btn warning" title="Configuración" onclick="window.location.href='settings_committee.php?rifa_id=<?php echo $rifa['id']; ?>'">
+                                                <i class="fas fa-cog"></i>
+                                            </button>
+                                        <?php else: // seller ?>
+                                            <button class="action-btn primary" title="Vender Boletos" onclick="sellTickets(<?php echo $rifa['id']; ?>)">
+                                                <i class="fas fa-shopping-cart"></i>
+                                            </button>
+                                            <button class="action-btn success" title="Mis Ventas" onclick="viewMySales(<?php echo $rifa['id']; ?>)">
+                                                <i class="fas fa-eye"></i>
+                                            </button>
                                         <?php endif; ?>
                                     </div>
-                                    <div style="font-size: 0.8rem; color: #059669; font-weight: 600;">
-                                        <?php echo number_format($rifa['display_commission_rate'], 1); ?>% comisión
-                                        <?php if ($has_custom_pricing && $rifa['display_commission_rate'] != $rifa['commission_rate']): ?>
-                                            <small style="color: #10b981;">(Personalizada)</small>
-                                        <?php endif; ?>
-                                    </div>
-                                    <div style="font-size: 0.8rem; color: #6b7280;">
-                                        $<?php echo number_format($rifa['display_ticket_price'] * ($rifa['display_commission_rate'] / 100), 2); ?> por venta
-                                    </div>
-                                    <?php if (isset($rifa['recently_updated_by_committee']) && $rifa['recently_updated_by_committee']): ?>
-                                        <div style="font-size: 0.7rem; color: #f59e0b; font-weight: 600;">
-                                            ✨ Actualizado por ti
-                                        </div>
-                                    <?php endif; ?>
-                                    <?php if ($has_custom_pricing): ?>
-                                        <div style="font-size: 0.7rem; color: #6b7280; margin-top: 0.2rem;">
-                                            Original: $<?php echo number_format($rifa['ticket_price'], 2); ?> 
-                                            (<?php echo number_format($rifa['commission_rate'], 1); ?>%)
-                                        </div>
-                                    <?php endif; ?>
-                                </td>
-                                <td>
-                                    <div class="rifa-progress">
-                                        <div class="progress-text">
-                                            <?php echo number_format($rifa['sold_tickets']); ?> / <?php echo number_format($rifa['total_tickets']); ?> 
-                                            (<?php echo number_format($progress_percentage, 1); ?>%)
-                                        </div>
-                                        <div class="progress-bar">
-                                            <div class="progress-fill" style="width: <?php echo $progress_percentage; ?>%"></div>
-                                        </div>
-                                    </div>
-                                </td>
-                                <td>
-                                    <div style="font-weight: 600; color: #059669;">
-                                        $<?php echo number_format($rifa['current_revenue'], 0); ?>
-                                    </div>
-                                    <div style="font-size: 0.8rem; color: #6b7280;">
-                                        de $<?php echo number_format($rifa['potential_revenue'], 0); ?>
-                                    </div>
-                                    <div style="font-size: 0.8rem; color: #f59e0b; font-weight: 600;">
-                                        Comisiones: $<?php echo number_format($rifa['total_commission'], 0); ?>
-                                    </div>
-                                </td>
-                                <td>
-                                    <span class="rifa-status status-<?php echo $rifa['status']; ?>">
-                                        <?php 
-                                            $status_labels = [
-                                                'active' => 'Activa',
-                                                'paused' => 'Pausada', 
-                                                'finished' => 'Finalizada',
-                                                'cancelled' => 'Cancelada'
-                                            ];
-                                            echo $status_labels[$rifa['status']] ?? ucfirst($rifa['status']);
-                                        ?>
-                                    </span>
-                                </td>
-                                <td>
-                                    <div class="rifa-actions">
-                                        <button class="action-btn btn-users" 
-                                                data-tooltip="Vendedores"
-                                                onclick="window.location.href='sellers.php?rifa_id=<?php echo $rifa['id']; ?>'">
-                                            <i class="fas fa-user-tie"></i>
-                                        </button>
-                                        
-                                        <button class="action-btn btn-payments" 
-                                                data-tooltip="Contabilidad"
-                                                onclick="window.location.href='accounting.php?rifa_id=<?php echo $rifa['id']; ?>'">
-                                            <i class="fas fa-calculator"></i>
-                                        </button>
-                                        
-                                        <button class="action-btn btn-settings" 
-                                                data-tooltip="Configuración"
-                                                onclick="window.location.href='settings_committee.php?rifa_id=<?php echo $rifa['id']; ?>'"
-                                                style="background: #f59e0b; color: white; border-color: #f59e0b;">
-                                            <i class="fas fa-cog"></i>
-                                        </button>
-                                    </div>
                                 </td>
                             </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                    <?php else: ?>
-                    <div style="padding: 3rem; text-align: center; color: #6b7280;">
-                        <i class="fas fa-gift" style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.5;"></i>
-                        <h3 style="margin-bottom: 0.5rem;">No hay rifas disponibles</h3>
-                        <p>Las rifas aparecerán aquí una vez que sean creadas</p>
-                    </div>
-                    <?php endif; ?>
-                </div>
-            </div>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            <?php endif; ?>
         </div>
-    </div>
-
-    <?php else: ?>
-    <!-- Vista Seller con precios y comisiones del comité -->
-    <div class="seller-panel">
-        <div class="panel-container">
-            <!-- Header Seller -->
-            <div class="seller-header">
-                <div style="flex: 1;">
-                    <div class="seller-header-top">
-                        <div>
-                            <div class="breadcrumb">
-                                <span>Panel</span>
-                            </div>
-                            <h1 class="seller-title">Panel de Vendedor</h1>
-                        </div>
-                        <div class="seller-user-info">
-                            <div class="seller-avatar">
-                                <?php echo strtoupper(substr($current_admin['username'], 0, 1)); ?>
-                            </div>
-                            <div class="seller-details">
-                                <div class="seller-name"><?php echo htmlspecialchars($current_admin['username']); ?></div>
-                                <div class="seller-type"><?php echo ucfirst($current_admin['user_type']); ?></div>
-                            </div>
-                            <a href="?logout=1" class="logout-btn" onclick="return confirm('¿Estás seguro de que deseas cerrar sesión?')">
-                                <i class="fas fa-sign-out-alt"></i>
-                                Cerrar Sesión
-                            </a>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Content Seller -->
-            <div class="seller-content">
-                <!-- Estadísticas del Vendedor -->
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-header">
-                            <div class="stat-icon icon-tickets">
-                                <i class="fas fa-ticket-alt"></i>
-                            </div>
-                        </div>
-                        <div class="stat-number">0</div>
-                        <div class="stat-label">Boletos Vendidos</div>
-                    </div>
-                    
-                    <div class="stat-card">
-                        <div class="stat-header">
-                            <div class="stat-icon icon-commission">
-                                <i class="fas fa-percentage"></i>
-                            </div>
-                        </div>
-                        <div class="stat-number">$0.00</div>
-                        <div class="stat-label">Comisiones Ganadas</div>
-                    </div>
-                    
-                    <div class="stat-card">
-                        <div class="stat-header">
-                            <div class="stat-icon icon-ranking">
-                                <i class="fas fa-medal"></i>
-                            </div>
-                        </div>
-                        <div class="stat-number">-</div>
-                        <div class="stat-label">Ranking Mensual</div>
-                    </div>
-                </div>
-                
-                <!-- Rifas Disponibles para Vender -->
-                <div class="rifas-table-container">
-                    <div class="table-header">
-                        <h2 class="table-title">Rifas Disponibles</h2>
-                        <button class="create-rifa-btn" onclick="window.location.href='sell_tickets.php'">
-                            <i class="fas fa-shopping-cart"></i>
-                            Crear Venta
-                        </button>
-                    </div>
-                    
-                    <?php if (!empty($rifas_data)): ?>
-                    <table class="rifas-table">
-                        <thead>
-                            <tr>
-                                <th>Rifa</th>
-                                <th>Precio del Boleto</th>
-                                <th>Tu Comisión</th>
-                                <th>Disponibles</th>
-                                <th>Mis Ventas</th>
-                                <th>Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($rifas_data as $rifa): ?>
-                            <?php 
-                                $available_tickets = $rifa['total_tickets'] - $rifa['sold_tickets'];
-                                $my_sales = 0; // Aquí implementarías la lógica para obtener las ventas del vendedor actual
-                                $commission = $rifa['display_ticket_price'] * ($rifa['display_commission_rate'] / 100);
-                            ?>
-                            <tr>
-                                <td>
-                                    <div class="rifa-name"><?php echo htmlspecialchars($rifa['name']); ?></div>
-                                    <div class="rifa-date">Sorteo: <?php echo $rifa['formatted_date']; ?></div>
-                                    <?php if (strtotime($rifa['updated_at']) > strtotime('-1 hour')): ?>
-                                        <div style="font-size: 0.7rem; color: #f59e0b; font-weight: 600;">
-                                            🔄 Precios actualizados
-                                        </div>
-                                    <?php endif; ?>
-                                </td>
-                                <td>
-                                    <div class="rifa-price" style="font-size: 1.2rem; font-weight: 700;">
-                                        $<?php echo number_format($rifa['display_ticket_price'], 2); ?>
-                                    </div>
-                                </td>
-                                <td>
-                                    <div class="commission-info" style="font-size: 1.2rem; font-weight: 700;">
-                                        $<?php echo number_format($commission, 2); ?>
-                                    </div>
-                                    <div style="font-size: 0.8rem; color: #059669;">
-                                        <?php echo number_format($rifa['display_commission_rate'], 1); ?>% por boleto
-                                    </div>
-                                </td>
-                                <td>
-                                    <div class="available-tickets"><?php echo number_format($available_tickets); ?></div>
-                                </td>
-                                <td>
-                                    <div class="my-sales"><?php echo $my_sales; ?></div>
-                                </td>
-                                <td>
-                                    <div class="rifa-actions">
-                                        <button class="action-btn btn-sell" 
-                                                data-tooltip="Vender Boletos"
-                                                onclick="sellTickets(<?php echo $rifa['id']; ?>)"
-                                                <?php echo $available_tickets <= 0 ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''; ?>>
-                                            <i class="fas fa-shopping-cart"></i>
-                                        </button>
-                                        
-                                        <button class="action-btn btn-view-sales" 
-                                                data-tooltip="Ver Mis Ventas"
-                                                onclick="viewMySales(<?php echo $rifa['id']; ?>)">
-                                            <i class="fas fa-eye"></i>
-                                        </button>
-                                    </div>
-                                </td>
-                            </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                    <?php else: ?>
-                    <div style="padding: 3rem; text-align: center; color: #6b7280;">
-                        <i class="fas fa-ticket-alt" style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.5;"></i>
-                        <h3 style="margin-bottom: 0.5rem;">No hay rifas disponibles</h3>
-                        <p>Las rifas disponibles para vender aparecerán aquí</p>
-                    </div>
-                    <?php endif; ?>
-                </div>
-            </div>
-        </div>
-    </div>
-    <?php endif; ?>
+    </main>
 
     <script>
         // Funciones para el Admin
@@ -801,58 +1012,8 @@ try {
             }
         }
         
-        function managePayments(rifaId) {
-            window.location.href = 'admin_payments.php?rifa_id=' + rifaId;
-        }
-        
         function viewReports(rifaId) {
             window.location.href = 'admin_reports.php?rifa_id=' + rifaId;
-        }
-        
-        function rifaSettings(rifaId) {
-            window.location.href = 'admin_settings.php?rifa_id=' + rifaId;
-        }
-        
-        // Funciones para status menu
-        function toggleStatusMenu(rifaId) {
-            const menu = document.getElementById('statusMenu-' + rifaId);
-            const allMenus = document.querySelectorAll('.status-dropdown');
-            
-            allMenus.forEach(m => {
-                if (m !== menu) {
-                    m.classList.remove('active');
-                }
-            });
-            
-            menu.classList.toggle('active');
-        }
-        
-        function changeRifaStatus(rifaId, newStatus) {
-            if (confirm(`¿Estás seguro de cambiar el estado de la rifa?`)) {
-                fetch('update_raffle_status.php', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        raffle_id: rifaId,
-                        status: newStatus
-                    })
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        location.reload();
-                    } else {
-                        alert('Error al cambiar el estado: ' + data.message);
-                    }
-                })
-                .catch(error => {
-                    alert('Error de conexión: ' + error);
-                });
-                
-                document.getElementById('statusMenu-' + rifaId).classList.remove('active');
-            }
         }
         
         // Funciones para vendedores
@@ -863,53 +1024,29 @@ try {
         function viewMySales(rifaId) {
             window.location.href = 'my_sales.php?rifa_id=' + rifaId;
         }
-        
-        // Auto-refresh para mostrar cambios en tiempo real
-        <?php if ($current_admin['user_type'] === 'committee' || $current_admin['user_type'] === 'seller'): ?>
-        setInterval(function() {
-            // Verificar si hay cambios recientes en las rifas
-            fetch('check_raffle_updates.php')
-            .then(response => response.json())
-            .then(data => {
-                if (data.hasUpdates) {
-                    // Mostrar notificación de actualización
-                    const notification = document.createElement('div');
-                    notification.style.cssText = `
-                        position: fixed;
-                        top: 20px;
-                        right: 20px;
-                        background: linear-gradient(135deg, #f59e0b, #d97706);
-                        color: white;
-                        padding: 1rem;
-                        border-radius: 10px;
-                        box-shadow: 0 10px 30px rgba(245, 158, 11, 0.3);
-                        z-index: 10000;
-                        cursor: pointer;
-                        animation: slideIn 0.3s ease;
-                    `;
-                    notification.innerHTML = '🔄 Hay actualizaciones disponibles. <strong>Haz clic para recargar</strong>';
-                    notification.onclick = () => location.reload();
-                    
-                    document.body.appendChild(notification);
-                    
-                    setTimeout(() => {
-                        if (document.body.contains(notification)) {
-                            document.body.removeChild(notification);
-                        }
-                    }, 10000);
-                }
-            })
-            .catch(error => console.log('Error checking updates:', error));
-        }, 60000); // Verificar cada minuto
-        <?php endif; ?>
-        
-        // Cerrar menús al hacer clic fuera
-        document.addEventListener('click', function(e) {
-            if (!e.target.closest('.status-menu-container')) {
-                document.querySelectorAll('.status-dropdown').forEach(menu => {
-                    menu.classList.remove('active');
+
+        // Notificaciones
+        document.addEventListener('DOMContentLoaded', function() {
+            // Simular notificaciones
+            const notificationBtn = document.querySelector('.notifications-btn');
+            if (notificationBtn) {
+                notificationBtn.addEventListener('click', function() {
+                    alert('Sistema de notificaciones - Por implementar');
                 });
             }
+
+            // Animaciones de entrada
+            const cards = document.querySelectorAll('.stat-card');
+            cards.forEach((card, index) => {
+                card.style.opacity = '0';
+                card.style.transform = 'translateY(20px)';
+                
+                setTimeout(() => {
+                    card.style.transition = 'all 0.6s ease';
+                    card.style.opacity = '1';
+                    card.style.transform = 'translateY(0)';
+                }, index * 100);
+            });
         });
     </script>
 </body>

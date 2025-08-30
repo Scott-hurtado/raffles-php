@@ -293,164 +293,741 @@ try {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vender Boletos - Panel de Vendedor</title>
-    <link rel="stylesheet" href="../assets/css/admin/admin_login.css">
-    <link rel="stylesheet" href="../assets/css/admin/panel.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <meta name="robots" content="noindex, nofollow">
-    <link rel="stylesheet" href="../assets/css/admin/sell_tickets.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #ffffff;
+            color: #1f2937;
+            line-height: 1.6;
+        }
+
+        /* Header */
+        .main-header {
+            background: #ffffff;
+            border-bottom: 1px solid #e5e7eb;
+            padding: 1.5rem 2rem;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .user-avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #059669, #047857);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 700;
+            font-size: 1.2rem;
+            box-shadow: 0 4px 12px rgba(5, 150, 105, 0.3);
+        }
+
+        .header-info h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #111827;
+            margin-bottom: 0.25rem;
+        }
+
+        .breadcrumb {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.85rem;
+            color: #6b7280;
+        }
+
+        .breadcrumb a {
+            color: #059669;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .breadcrumb a:hover {
+            text-decoration: underline;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.25rem;
+            border-radius: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-decoration: none;
+            border: none;
+            font-size: 0.9rem;
+        }
+
+        .btn-secondary {
+            background: #f3f4f6;
+            color: #6b7280;
+            border: 1px solid #d1d5db;
+        }
+
+        .btn-secondary:hover {
+            background: #e5e7eb;
+            color: #374151;
+            text-decoration: none;
+            transform: translateY(-1px);
+        }
+
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+            border: 1px solid #ef4444;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+            border-color: #dc2626;
+            color: white;
+            text-decoration: none;
+            transform: translateY(-1px);
+        }
+
+        /* Main Container */
+        .main-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        /* Stats Cards */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 16px;
+            padding: 1.5rem;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: var(--card-color);
+            opacity: 0.8;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            border-color: var(--card-color);
+        }
+
+        .stat-card.stat-sales { --card-color: #3b82f6; }
+        .stat-card.stat-tickets { --card-color: #10b981; }
+        .stat-card.stat-commission { --card-color: #f59e0b; }
+        .stat-card.stat-month { --card-color: #8b5cf6; }
+
+        .stat-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .stat-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            background: var(--card-color);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .stat-title {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-number {
+            font-size: 2.2rem;
+            font-weight: 800;
+            color: #111827;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-change {
+            font-size: 0.85rem;
+            color: #059669;
+            font-weight: 500;
+        }
+
+        /* Content Sections */
+        .content-section {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 16px;
+            overflow: hidden;
+            margin-bottom: 2rem;
+        }
+
+        .section-header {
+            padding: 1.5rem 2rem;
+            border-bottom: 1px solid #e5e7eb;
+            background: #fafbfc;
+        }
+
+        .section-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #111827;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .section-subtitle {
+            color: #6b7280;
+            font-size: 0.9rem;
+        }
+
+        .section-content {
+            padding: 2rem;
+        }
+
+        /* Raffle Selection */
+        .raffle-selector {
+            margin-bottom: 2rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-label {
+            display: block;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        .form-select, .form-input {
+            width: 100%;
+            padding: 0.875rem 1rem;
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            font-size: 1rem;
+            transition: all 0.2s ease;
+            background: white;
+        }
+
+        .form-select:focus, .form-input:focus {
+            outline: none;
+            border-color: #059669;
+            box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.1);
+        }
+
+        /* Selected Raffle Info */
+        .selected-raffle-info {
+            display: none;
+            background: linear-gradient(135deg, #ecfdf5, #d1fae5);
+            border: 2px solid #10b981;
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .selected-raffle-info.show {
+            display: block;
+        }
+
+        .raffle-info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .info-item {
+            text-align: center;
+        }
+
+        .info-label {
+            font-size: 0.8rem;
+            color: #065f46;
+            font-weight: 500;
+            margin-bottom: 0.25rem;
+        }
+
+        .info-value {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #064e3b;
+        }
+
+        /* Form Grid */
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+        }
+
+        .form-grid.single-column {
+            grid-template-columns: 1fr;
+        }
+
+        /* Payment Methods */
+        .payment-methods {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .payment-option {
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 1.25rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background: white;
+        }
+
+        .payment-option:hover {
+            border-color: #059669;
+            background: #f0fdf4;
+        }
+
+        .payment-option.selected {
+            border-color: #059669;
+            background: #ecfdf5;
+            box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.1);
+        }
+
+        .payment-icon {
+            font-size: 1.8rem;
+            color: #059669;
+            margin-bottom: 0.5rem;
+        }
+
+        .payment-option h4 {
+            font-weight: 600;
+            color: #111827;
+        }
+
+        /* Cash Section */
+        .cash-section {
+            display: none;
+            background: #fffbeb;
+            border: 2px solid #f59e0b;
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-top: 1.5rem;
+        }
+
+        .cash-section.active {
+            display: block;
+        }
+
+        .cash-grid {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 1.5rem;
+            align-items: end;
+        }
+
+        .change-display {
+            background: #dcfdf7;
+            border: 2px solid #10b981;
+            border-radius: 12px;
+            padding: 1rem;
+            text-align: center;
+        }
+
+        .change-display h4 {
+            color: #065f46;
+            margin-bottom: 0.5rem;
+        }
+
+        .change-amount {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #047857;
+        }
+
+        /* Summary Panel */
+        .summary-panel {
+            background: linear-gradient(135deg, #eff6ff, #dbeafe);
+            border: 2px solid #3b82f6;
+            border-radius: 16px;
+            padding: 2rem;
+            margin-top: 2rem;
+        }
+
+        .summary-title {
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: #1e40af;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .summary-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid rgba(59, 130, 246, 0.1);
+        }
+
+        .summary-row:last-child {
+            border-bottom: none;
+            padding-top: 1rem;
+            margin-top: 1rem;
+            border-top: 2px solid rgba(59, 130, 246, 0.2);
+            font-weight: 700;
+            font-size: 1.1rem;
+        }
+
+        .summary-label {
+            color: #1e40af;
+            font-weight: 500;
+        }
+
+        .summary-value {
+            color: #1e3a8a;
+            font-weight: 600;
+        }
+
+        /* Buttons */
+        .btn-primary {
+            background: linear-gradient(135deg, #059669, #047857);
+            color: white;
+            border: 1px solid #059669;
+        }
+
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #047857, #065f46);
+            border-color: #047857;
+            color: white;
+            text-decoration: none;
+            transform: translateY(-1px);
+            box-shadow: 0 8px 20px rgba(5, 150, 105, 0.3);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .form-buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: flex-end;
+            margin-top: 2rem;
+            padding-top: 2rem;
+            border-top: 1px solid #e5e7eb;
+        }
+
+        /* Alerts */
+        .alert {
+            padding: 1rem;
+            border-radius: 12px;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+        }
+
+        .alert-success {
+            background: #ecfdf5;
+            color: #065f46;
+            border: 1px solid #a7f3d0;
+        }
+
+        .alert-error {
+            background: #fef2f2;
+            color: #991b1b;
+            border: 1px solid #fecaca;
+        }
+
+        .alert-icon {
+            width: 20px;
+            height: 20px;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
+        .alert-content {
+            white-space: pre-line;
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .main-container {
+                padding: 1rem;
+            }
+
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .header-content {
+                flex-direction: column;
+                gap: 1rem;
+                text-align: center;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .payment-methods {
+                grid-template-columns: 1fr;
+            }
+
+            .cash-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .form-buttons {
+                flex-direction: column;
+            }
+
+            .raffle-info-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
 </head>
 <body>
-    <div class="sell-container">
-        <!-- Header -->
-        <div class="sell-header">
-            <div class="header-info">
-                <h1><i class="fas fa-shopping-cart"></i> Vender Boletos</h1>
-                <p>Registra una nueva venta - Los precios pueden ser establecidos por el comité</p>
-            </div>
-            <div class="admin-info">
-                <div class="admin-badge">Vendedor</div>
-                <div class="admin-details">
-                    <?php echo htmlspecialchars($current_admin['username']); ?><br>
-                    <?php echo htmlspecialchars($current_admin['email']); ?>
+    <!-- Header -->
+    <header class="main-header">
+        <div class="header-content">
+            <div class="header-left">
+                <div class="user-avatar">
+                    <?php echo strtoupper(substr($current_admin['username'], 0, 1)); ?>
                 </div>
-                <div style="margin-top: 1rem;">
-                    <a href="panel.php" class="btn btn-secondary" style="margin-right: 1rem;">
-                        <i class="fas fa-arrow-left"></i>
-                        Volver al Panel
-                    </a>
-                    <a href="?logout=1" class="logout-btn" onclick="return confirm('¿Estás seguro de que deseas cerrar sesión?')">
-                        <i class="fas fa-sign-out-alt"></i>
-                        Cerrar Sesión
-                    </a>
+                <div class="header-info">
+                    <div class="breadcrumb">
+                        <a href="panel.php">Panel</a>
+                        <i class="fas fa-chevron-right"></i>
+                        <span>Vender Boletos</span>
+                    </div>
+                    <h1>Vender Boletos</h1>
                 </div>
             </div>
+            <div class="header-right">
+                <a href="panel.php" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i>
+                    Volver
+                </a>
+                <a href="?logout=1" class="btn btn-danger" onclick="return confirm('¿Estás seguro de que deseas cerrar sesión?')">
+                    <i class="fas fa-sign-out-alt"></i>
+                    Cerrar Sesión
+                </a>
+            </div>
         </div>
+    </header>
 
-        <div class="db-notice">
-            📊 Los precios pueden ser personalizados por cada comité - Se registran en tabla "sells" con trazabilidad completa
-        </div>
-
-        <!-- Estadísticas del vendedor -->
-        <div class="seller-stats">
-            <div class="stat-card">
+    <!-- Main Container -->
+    <main class="main-container">
+        <!-- Stats -->
+        <div class="stats-grid">
+            <div class="stat-card stat-sales">
+                <div class="stat-header">
+                    <div class="stat-icon">
+                        <i class="fas fa-handshake"></i>
+                    </div>
+                    <div class="stat-title">Ventas Totales</div>
+                </div>
                 <div class="stat-number"><?php echo number_format($seller_stats['total_sales']); ?></div>
-                <div class="stat-label">Ventas Totales</div>
+                <div class="stat-change">Transacciones completadas</div>
             </div>
-            <div class="stat-card">
+
+            <div class="stat-card stat-tickets">
+                <div class="stat-header">
+                    <div class="stat-icon">
+                        <i class="fas fa-ticket-alt"></i>
+                    </div>
+                    <div class="stat-title">Boletos Vendidos</div>
+                </div>
                 <div class="stat-number"><?php echo number_format($seller_stats['total_tickets']); ?></div>
-                <div class="stat-label">Boletos Vendidos</div>
+                <div class="stat-change">Total de boletos</div>
             </div>
-            <div class="stat-card">
+
+            <div class="stat-card stat-commission">
+                <div class="stat-header">
+                    <div class="stat-icon">
+                        <i class="fas fa-coins"></i>
+                    </div>
+                    <div class="stat-title">Comisiones Ganadas</div>
+                </div>
                 <div class="stat-number">$<?php echo number_format($seller_stats['total_commission'], 2); ?></div>
-                <div class="stat-label">Comisiones Ganadas</div>
+                <div class="stat-change">Total acumulado</div>
             </div>
-            <div class="stat-card">
+
+            <div class="stat-card stat-month">
+                <div class="stat-header">
+                    <div class="stat-icon">
+                        <i class="fas fa-calendar-alt"></i>
+                    </div>
+                    <div class="stat-title">Ventas Este Mes</div>
+                </div>
                 <div class="stat-number"><?php echo number_format($seller_stats['sales_this_month']); ?></div>
-                <div class="stat-label">Ventas Este Mes</div>
+                <div class="stat-change">Ventas realizadas</div>
             </div>
         </div>
 
-        <!-- Información de rifa seleccionada -->
+        <!-- Alerts -->
+        <?php if ($success_message): ?>
+            <div class="alert alert-success">
+                <i class="fas fa-check-circle alert-icon"></i>
+                <div class="alert-content"><?php echo htmlspecialchars($success_message); ?></div>
+            </div>
+        <?php endif; ?>
+
+        <?php if ($error_message): ?>
+            <div class="alert alert-error">
+                <i class="fas fa-exclamation-triangle alert-icon"></i>
+                <div class="alert-content"><?php echo htmlspecialchars($error_message); ?></div>
+            </div>
+        <?php endif; ?>
+
+        <!-- Selected Raffle Info -->
         <?php if ($selected_raffle): ?>
-        <div class="raffle-info-card">
-            <h3>
+        <div class="selected-raffle-info show" id="selectedRaffleInfo">
+            <h3 style="color: #065f46; margin-bottom: 0.5rem;">
                 <i class="fas fa-info-circle"></i>
-                Rifa Seleccionada
-                <?php if (strtotime($selected_raffle['updated_at']) > strtotime('-1 hour')): ?>
-                    <span class="updated-indicator">🔄 Actualizada recientemente</span>
-                <?php endif; ?>
-                <?php if ($selected_raffle['has_committee_pricing']): ?>
-                    <span class="committee-pricing-indicator">👥 Precios del comité</span>
-                <?php endif; ?>
+                Rifa Seleccionada: <?php echo htmlspecialchars($selected_raffle['name']); ?>
             </h3>
-            <div class="raffle-details">
-                <div class="detail-item">
-                    <span class="detail-label">Nombre</span>
-                    <span class="detail-value"><?php echo htmlspecialchars($selected_raffle['name']); ?></span>
+            <div class="raffle-info-grid">
+                <div class="info-item">
+                    <div class="info-label">Precio por Boleto</div>
+                    <div class="info-value">$<?php echo number_format($selected_raffle['ticket_price'], 2); ?></div>
                 </div>
-                <div class="detail-item">
-                    <span class="detail-label">Precio por Boleto</span>
-                    <span class="detail-value">$<?php echo number_format($selected_raffle['ticket_price'], 2); ?></span>
+                <div class="info-item">
+                    <div class="info-label">Tu Comisión</div>
+                    <div class="info-value"><?php echo number_format($selected_raffle['commission_rate'], 1); ?>%</div>
                 </div>
-                <div class="detail-item">
-                    <span class="detail-label">Tu Comisión</span>
-                    <span class="detail-value"><?php echo number_format($selected_raffle['commission_rate'], 1); ?>% ($<?php echo number_format($selected_raffle['ticket_price'] * ($selected_raffle['commission_rate'] / 100), 2); ?>)</span>
+                <div class="info-item">
+                    <div class="info-label">Boletos Disponibles</div>
+                    <div class="info-value"><?php echo number_format($selected_raffle['total_tickets'] - $selected_raffle['sold_tickets']); ?></div>
                 </div>
-                <div class="detail-item">
-                    <span class="detail-label">Boletos Disponibles</span>
-                    <span class="detail-value"><?php echo number_format($selected_raffle['total_tickets'] - $selected_raffle['sold_tickets']); ?></span>
+                <div class="info-item">
+                    <div class="info-label">Fecha de Sorteo</div>
+                    <div class="info-value"><?php echo date('d/m/Y', strtotime($selected_raffle['draw_date'])); ?></div>
                 </div>
             </div>
-            
-            <?php if ($selected_raffle['has_committee_pricing'] && $selected_raffle['original_price']): ?>
-            <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(59, 130, 246, 0.2);">
-                <p style="font-size: 0.8rem; color: #6b7280;">
-                    <strong>Precio original:</strong> $<?php echo number_format($selected_raffle['original_price'], 2); ?>
-                    • <strong>Este precio fue personalizado por el comité</strong>
-                </p>
-            </div>
-            <?php endif; ?>
         </div>
         <?php endif; ?>
 
-        <!-- Formulario de Venta -->
-        <div class="sell-form-container">
-            <div class="form-header">
-                <h2><i class="fas fa-ticket-alt"></i> Información de la Venta</h2>
+        <!-- Sell Form -->
+        <div class="content-section">
+            <div class="section-header">
+                <div>
+                    <h2 class="section-title">
+                        <i class="fas fa-shopping-cart"></i>
+                        Nueva Venta
+                    </h2>
+                    <p class="section-subtitle">Complete la información para registrar una nueva venta de boletos</p>
+                </div>
             </div>
 
-            <div class="form-content">
-                <?php if ($success_message): ?>
-                    <div class="alert alert-success">
-                        <i class="fas fa-check-circle"></i> <?php echo htmlspecialchars($success_message); ?>
-                    </div>
-                <?php endif; ?>
-
-                <?php if ($error_message): ?>
-                    <div class="alert alert-error">
-                        <i class="fas fa-exclamation-triangle"></i> <?php echo htmlspecialchars($error_message); ?>
-                    </div>
-                <?php endif; ?>
-
+            <div class="section-content">
                 <?php if (empty($available_raffles)): ?>
                     <div class="alert alert-error">
-                        <i class="fas fa-info-circle"></i> No hay rifas disponibles para vender en este momento.
+                        <i class="fas fa-info-circle alert-icon"></i>
+                        <div class="alert-content">No hay rifas disponibles para vender en este momento.</div>
                     </div>
                 <?php else: ?>
 
                 <form method="POST" id="sellForm">
-                    <div class="form-grid">
-                        <!-- Selección de Rifa -->
-                        <div class="form-group full-width">
-                            <label class="form-label" for="raffle_id">
-                                <i class="fas fa-gift"></i> Seleccionar Rifa *
-                            </label>
-                            <select id="raffle_id" name="raffle_id" class="form-select" required onchange="updateRaffleInfo()">
-                                <option value="">Seleccione una rifa...</option>
-                                <?php foreach ($available_raffles as $raffle): ?>
-                                    <?php 
-                                        $available = $raffle['total_tickets'] - $raffle['sold_tickets']; 
-                                        $isSelected = $selected_raffle && $selected_raffle['id'] == $raffle['id'];
-                                        $recentlyUpdated = strtotime($raffle['updated_at']) > strtotime('-1 hour');
-                                        $hasCommitteePricing = $raffle['has_committee_pricing'];
-                                    ?>
-                                    <option value="<?php echo $raffle['id']; ?>" 
-                                            data-price="<?php echo $raffle['ticket_price']; ?>"
-                                            data-commission="<?php echo $raffle['commission_rate']; ?>"
-                                            data-available="<?php echo $available; ?>"
-                                            <?php echo $isSelected ? 'selected' : ''; ?>>
-                                        <?php echo htmlspecialchars($raffle['name']); ?> - 
-                                        $<?php echo number_format($raffle['ticket_price'], 2); ?> 
-                                        (<?php echo number_format($raffle['commission_rate'], 1); ?>% comisión) -
-                                        <?php echo $available; ?> disponibles
-                                        <?php if ($hasCommitteePricing): ?>👥<?php endif; ?>
-                                        <?php if ($recentlyUpdated): ?>🔄<?php endif; ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
+                    <!-- Raffle Selection -->
+                    <div class="form-group">
+                        <label class="form-label" for="raffle_id">
+                            <i class="fas fa-gift"></i> Seleccionar Rifa *
+                        </label>
+                        <select id="raffle_id" name="raffle_id" class="form-select" required onchange="updateRaffleInfo()">
+                            <option value="">Seleccione una rifa...</option>
+                            <?php foreach ($available_raffles as $raffle): ?>
+                                <?php 
+                                    $available = $raffle['total_tickets'] - $raffle['sold_tickets']; 
+                                    $isSelected = $selected_raffle && $selected_raffle['id'] == $raffle['id'];
+                                ?>
+                                <option value="<?php echo $raffle['id']; ?>" 
+                                        data-price="<?php echo $raffle['ticket_price']; ?>"
+                                        data-commission="<?php echo $raffle['commission_rate']; ?>"
+                                        data-available="<?php echo $available; ?>"
+                                        data-name="<?php echo htmlspecialchars($raffle['name']); ?>"
+                                        <?php echo $isSelected ? 'selected' : ''; ?>>
+                                    <?php echo htmlspecialchars($raffle['name']); ?> - 
+                                    $<?php echo number_format($raffle['ticket_price'], 2); ?> 
+                                    (<?php echo $available; ?> disponibles)
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
 
-                        <!-- Información del Cliente -->
+                    <!-- Customer Information -->
+                    <div class="form-grid">
                         <div class="form-group">
                             <label class="form-label" for="customer_name">
                                 <i class="fas fa-user"></i> Nombre del Cliente *
@@ -459,7 +1036,7 @@ try {
                                    id="customer_name" 
                                    name="customer_name" 
                                    class="form-input" 
-                                   placeholder="Nombre completo"
+                                   placeholder="Nombre completo del cliente"
                                    required>
                         </div>
 
@@ -471,10 +1048,12 @@ try {
                                    id="customer_phone" 
                                    name="customer_phone" 
                                    class="form-input" 
-                                   placeholder="Número de teléfono"
+                                   placeholder="+52 662 123 4567"
                                    required>
                         </div>
+                    </div>
 
+                    <div class="form-grid">
                         <div class="form-group">
                             <label class="form-label" for="customer_email">
                                 <i class="fas fa-envelope"></i> Email (Opcional)
@@ -483,7 +1062,7 @@ try {
                                    id="customer_email" 
                                    name="customer_email" 
                                    class="form-input" 
-                                   placeholder="correo@ejemplo.com">
+                                   placeholder="cliente@email.com">
                         </div>
 
                         <div class="form-group">
@@ -498,71 +1077,86 @@ try {
                                    min="1"
                                    required>
                         </div>
+                    </div>
 
-                        <!-- Método de Pago -->
-                        <div class="form-group full-width">
-                            <label class="form-label">
-                                <i class="fas fa-credit-card"></i> Método de Pago *
-                            </label>
-                            <div class="payment-methods">
-                                <div class="payment-option" onclick="selectPaymentMethod('cash')">
-                                    <i class="fas fa-money-bill-wave payment-icon"></i>
-                                    <div>Efectivo</div>
+                    <!-- Payment Method -->
+                    <div class="form-group">
+                        <label class="form-label">
+                            <i class="fas fa-credit-card"></i> Método de Pago *
+                        </label>
+                        <div class="payment-methods">
+                            <div class="payment-option" onclick="selectPaymentMethod('cash')">
+                                <div class="payment-icon">
+                                    <i class="fas fa-money-bill-wave"></i>
                                 </div>
-                                <div class="payment-option" onclick="selectPaymentMethod('transfer')">
-                                    <i class="fas fa-university payment-icon"></i>
-                                    <div>Transferencia</div>
-                                </div>
-                                <div class="payment-option" onclick="selectPaymentMethod('card')">
-                                    <i class="fas fa-credit-card payment-icon"></i>
-                                    <div>Tarjeta</div>
-                                </div>
+                                <h4>Efectivo</h4>
+                                <p style="font-size: 0.8rem; color: #6b7280; margin-top: 0.25rem;">Pago en efectivo</p>
                             </div>
-                            <input type="hidden" id="payment_method" name="payment_method" required>
-                        </div>
-
-                        <!-- Sección para Efectivo -->
-                        <div id="cash-section" class="cash-section">
-                            <h4 style="color: #ea580c; margin-bottom: 1rem;">
-                                <i class="fas fa-calculator"></i> Cálculo de Cambio
-                            </h4>
-                            <div class="cash-calculation">
-                                <div class="form-group">
-                                    <label class="form-label" for="cash_received">
-                                        Efectivo Recibido
-                                    </label>
-                                    <input type="number" 
-                                           id="cash_received" 
-                                           name="cash_received" 
-                                           class="form-input" 
-                                           step="0.01"
-                                           placeholder="0.00">
+                            <div class="payment-option" onclick="selectPaymentMethod('transfer')">
+                                <div class="payment-icon">
+                                    <i class="fas fa-university"></i>
                                 </div>
-                                <div id="change-display" class="change-highlight" style="display: none;">
-                                    <div>Cambio a Entregar:</div>
-                                    <div style="font-size: 1.5rem;" id="change-amount">$0.00</div>
+                                <h4>Transferencia</h4>
+                                <p style="font-size: 0.8rem; color: #6b7280; margin-top: 0.25rem;">Transferencia bancaria</p>
+                            </div>
+                            <div class="payment-option" onclick="selectPaymentMethod('card')">
+                                <div class="payment-icon">
+                                    <i class="fas fa-credit-card"></i>
                                 </div>
+                                <h4>Tarjeta</h4>
+                                <p style="font-size: 0.8rem; color: #6b7280; margin-top: 0.25rem;">Tarjeta de crédito/débito</p>
                             </div>
                         </div>
+                        <input type="hidden" id="payment_method" name="payment_method" required>
+                    </div>
 
-                        <!-- Notas -->
-                        <div class="form-group full-width">
-                            <label class="form-label" for="notes">
-                                <i class="fas fa-sticky-note"></i> Notas (Opcional)
-                            </label>
-                            <textarea id="notes" 
-                                      name="notes" 
-                                      class="form-input" 
-                                      rows="3"
-                                      placeholder="Notas adicionales sobre la venta..."></textarea>
+                    <!-- Cash Section -->
+                    <div id="cash-section" class="cash-section">
+                        <h4 style="color: #d97706; margin-bottom: 1rem;">
+                            <i class="fas fa-calculator"></i> Cálculo de Cambio
+                        </h4>
+                        <div class="cash-grid">
+                            <div class="form-group" style="margin: 0;">
+                                <label class="form-label" for="cash_received">
+                                    Efectivo Recibido
+                                </label>
+                                <input type="number" 
+                                       id="cash_received" 
+                                       name="cash_received" 
+                                       class="form-input" 
+                                       step="0.01"
+                                       placeholder="0.00"
+                                       oninput="calculateChange()">
+                            </div>
+                            <div id="change-display" class="change-display" style="display: none;">
+                                <h4>Cambio a Entregar</h4>
+                                <div class="change-amount" id="change-amount">$0.00</div>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- Panel de Resumen -->
+                    <!-- Notes -->
+                    <div class="form-group">
+                        <label class="form-label" for="notes">
+                            <i class="fas fa-sticky-note"></i> Notas (Opcional)
+                        </label>
+                        <textarea id="notes" 
+                                  name="notes" 
+                                  class="form-input" 
+                                  rows="3"
+                                  style="resize: vertical;"
+                                  placeholder="Notas adicionales sobre la venta..."></textarea>
+                    </div>
+
+                    <!-- Summary Panel -->
                     <div class="summary-panel">
                         <div class="summary-title">
                             <i class="fas fa-receipt"></i>
                             Resumen de la Venta
+                        </div>
+                        <div class="summary-row">
+                            <span class="summary-label">Rifa Seleccionada:</span>
+                            <span class="summary-value" id="selected-raffle-name">Ninguna</span>
                         </div>
                         <div class="summary-row">
                             <span class="summary-label">Precio por Boleto:</span>
@@ -577,27 +1171,23 @@ try {
                             <span class="summary-value" id="subtotal">$0.00</span>
                         </div>
                         <div class="summary-row">
-                            <span class="summary-label">Comisión (%):</span>
-                            <span class="summary-value" id="commission-rate">0%</span>
-                        </div>
-                        <div class="summary-row">
                             <span class="summary-label">Tu Comisión:</span>
                             <span class="summary-value" id="commission">$0.00</span>
                         </div>
                         <div class="summary-row">
-                            <span class="summary-label">Total:</span>
+                            <span class="summary-label">Total a Cobrar:</span>
                             <span class="summary-value" id="total-amount">$0.00</span>
                         </div>
                     </div>
 
-                    <!-- Botones -->
+                    <!-- Form Buttons -->
                     <div class="form-buttons">
                         <a href="panel.php" class="btn btn-secondary">
                             <i class="fas fa-times"></i>
                             Cancelar
                         </a>
                         <button type="submit" class="btn btn-primary" id="submit-btn" disabled>
-                            <i class="fas fa-database"></i>
+                            <i class="fas fa-check"></i>
                             Registrar Venta
                         </button>
                     </div>
@@ -606,7 +1196,7 @@ try {
                 <?php endif; ?>
             </div>
         </div>
-    </div>
+    </main>
 
     <script>
         let selectedRaffle = null;
@@ -627,6 +1217,7 @@ try {
             if (option.value) {
                 selectedRaffle = {
                     id: option.value,
+                    name: option.dataset.name,
                     price: parseFloat(option.dataset.price),
                     commission: parseFloat(option.dataset.commission),
                     available: parseInt(option.dataset.available)
@@ -637,12 +1228,67 @@ try {
                 quantityInput.max = selectedRaffle.available;
                 quantityInput.value = 1;
                 
-                console.log('Rifa seleccionada:', selectedRaffle);
+                // Mostrar info de rifa seleccionada
+                showSelectedRaffleInfo();
+                
             } else {
                 selectedRaffle = null;
+                hideSelectedRaffleInfo();
             }
             
             updateSummary();
+        }
+
+        function showSelectedRaffleInfo() {
+            let infoDiv = document.getElementById('selectedRaffleInfo');
+            if (!infoDiv) {
+                // Crear el div si no existe
+                infoDiv = document.createElement('div');
+                infoDiv.id = 'selectedRaffleInfo';
+                infoDiv.className = 'selected-raffle-info';
+                
+                // Insertarlo después de las stats
+                const statsGrid = document.querySelector('.stats-grid');
+                statsGrid.insertAdjacentElement('afterend', infoDiv);
+            }
+            
+            if (selectedRaffle) {
+                const available = selectedRaffle.available;
+                const commissionAmount = selectedRaffle.price * (selectedRaffle.commission / 100);
+                
+                infoDiv.innerHTML = `
+                    <h3 style="color: #065f46; margin-bottom: 0.5rem;">
+                        <i class="fas fa-info-circle"></i>
+                        Rifa Seleccionada: ${selectedRaffle.name}
+                    </h3>
+                    <div class="raffle-info-grid">
+                        <div class="info-item">
+                            <div class="info-label">Precio por Boleto</div>
+                            <div class="info-value">$${selectedRaffle.price.toFixed(2)}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Tu Comisión</div>
+                            <div class="info-value">${selectedRaffle.commission.toFixed(1)}% ($${commissionAmount.toFixed(2)})</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Boletos Disponibles</div>
+                            <div class="info-value">${available.toLocaleString()}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Estado</div>
+                            <div class="info-value" style="color: #059669;">Disponible</div>
+                        </div>
+                    </div>
+                `;
+                infoDiv.classList.add('show');
+            }
+        }
+
+        function hideSelectedRaffleInfo() {
+            const infoDiv = document.getElementById('selectedRaffleInfo');
+            if (infoDiv) {
+                infoDiv.classList.remove('show');
+            }
         }
 
         // Selección de cantidad
@@ -677,10 +1323,6 @@ try {
         }
 
         // Cálculo de cambio
-        document.getElementById('cash_received').addEventListener('input', function() {
-            calculateChange();
-        });
-
         function calculateChange() {
             if (!selectedRaffle || paymentMethod !== 'cash') return;
             
@@ -694,13 +1336,17 @@ try {
             
             if (cashReceived > 0) {
                 changeDisplay.style.display = 'block';
-                changeAmount.textContent = '$' + change.toFixed(2);
                 
                 if (change < 0) {
                     changeAmount.style.color = '#dc2626';
                     changeAmount.textContent = 'Insuficiente: -$' + Math.abs(change).toFixed(2);
+                    changeDisplay.style.borderColor = '#dc2626';
+                    changeDisplay.style.background = '#fef2f2';
                 } else {
-                    changeAmount.style.color = '#059669';
+                    changeAmount.style.color = '#047857';
+                    changeAmount.textContent = '$' + change.toFixed(2);
+                    changeDisplay.style.borderColor = '#10b981';
+                    changeDisplay.style.background = '#dcfdf7';
                 }
             } else {
                 changeDisplay.style.display = 'none';
@@ -717,10 +1363,10 @@ try {
                 const subtotal = unitPrice * quantity;
                 const commission = subtotal * (commissionRate / 100);
                 
+                document.getElementById('selected-raffle-name').textContent = selectedRaffle.name;
                 document.getElementById('unit-price').textContent = '$' + unitPrice.toFixed(2);
                 document.getElementById('quantity-display').textContent = quantity;
                 document.getElementById('subtotal').textContent = '$' + subtotal.toFixed(2);
-                document.getElementById('commission-rate').textContent = commissionRate.toFixed(1) + '%';
                 document.getElementById('commission').textContent = '$' + commission.toFixed(2);
                 document.getElementById('total-amount').textContent = '$' + subtotal.toFixed(2);
                 
@@ -738,10 +1384,10 @@ try {
                     submitBtn.disabled = true;
                 }
             } else {
+                document.getElementById('selected-raffle-name').textContent = 'Ninguna';
                 document.getElementById('unit-price').textContent = '$0.00';
                 document.getElementById('quantity-display').textContent = '0';
                 document.getElementById('subtotal').textContent = '$0.00';
-                document.getElementById('commission-rate').textContent = '0%';
                 document.getElementById('commission').textContent = '$0.00';
                 document.getElementById('total-amount').textContent = '$0.00';
                 document.getElementById('submit-btn').disabled = true;
@@ -765,6 +1411,21 @@ try {
                     return;
                 }
             }
+        });
+
+        // Animaciones de entrada
+        document.addEventListener('DOMContentLoaded', function() {
+            const cards = document.querySelectorAll('.stat-card');
+            cards.forEach((card, index) => {
+                card.style.opacity = '0';
+                card.style.transform = 'translateY(20px)';
+                
+                setTimeout(() => {
+                    card.style.transition = 'all 0.6s ease';
+                    card.style.opacity = '1';
+                    card.style.transform = 'translateY(0)';
+                }, index * 100);
+            });
         });
     </script>
 </body>
