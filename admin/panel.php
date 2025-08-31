@@ -411,22 +411,6 @@ try {
             margin-bottom: 0.5rem;
         }
 
-        .stat-change {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            font-size: 0.85rem;
-            font-weight: 500;
-        }
-
-        .stat-change.positive {
-            color: #059669;
-        }
-
-        .stat-change.negative {
-            color: #dc2626;
-        }
-
         /* Main Content Section */
         .content-section {
             background: white;
@@ -440,7 +424,7 @@ try {
             border-bottom: 1px solid #e5e7eb;
             background: #fafbfc;
             display: flex;
-            justify-content: between;
+            justify-content: space-between;
             align-items: center;
         }
 
@@ -475,6 +459,28 @@ try {
         .primary-btn:hover {
             transform: translateY(-1px);
             box-shadow: 0 8px 20px rgba(59, 130, 246, 0.3);
+            color: white;
+            text-decoration: none;
+        }
+
+        .success-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-decoration: none;
+        }
+
+        .success-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 20px rgba(16, 185, 129, 0.3);
             color: white;
             text-decoration: none;
         }
@@ -791,10 +797,6 @@ try {
                     <div class="stat-title">Rifas Activas</div>
                 </div>
                 <div class="stat-number"><?php echo number_format($stats['active_raffles']); ?></div>
-                <div class="stat-change positive">
-                    <i class="fas fa-arrow-up"></i>
-                    +2 esta semana
-                </div>
             </div>
 
             <div class="stat-card stat-revenue">
@@ -805,10 +807,6 @@ try {
                     <div class="stat-title">Revenue Total</div>
                 </div>
                 <div class="stat-number">$<?php echo number_format($stats['total_revenue'], 0); ?></div>
-                <div class="stat-change positive">
-                    <i class="fas fa-arrow-up"></i>
-                    +12% vs mes anterior
-                </div>
             </div>
 
             <div class="stat-card stat-sales">
@@ -819,10 +817,6 @@ try {
                     <div class="stat-title">Ventas del Mes</div>
                 </div>
                 <div class="stat-number">$<?php echo number_format($stats['monthly_sales'], 0); ?></div>
-                <div class="stat-change positive">
-                    <i class="fas fa-arrow-up"></i>
-                    +8% vs mes anterior
-                </div>
             </div>
 
             <div class="stat-card stat-commissions">
@@ -833,10 +827,6 @@ try {
                     <div class="stat-title"><?php echo $current_admin['user_type'] === 'seller' ? 'Mis Comisiones' : 'Comisiones Totales'; ?></div>
                 </div>
                 <div class="stat-number">$<?php echo number_format($stats['total_commissions'], 0); ?></div>
-                <div class="stat-change positive">
-                    <i class="fas fa-arrow-up"></i>
-                    +15% vs mes anterior
-                </div>
             </div>
         </div>
 
@@ -847,11 +837,21 @@ try {
                     <i class="fas fa-list"></i>
                     Gestión de Rifas
                 </h2>
-                <?php if ($current_admin['user_type'] === 'admin' || $current_admin['user_type'] === 'committee'): ?>
-                <a href="admin_create_raffle.php" class="primary-btn">
-                    <i class="fas fa-plus"></i>
-                    Nueva Rifa
-                </a>
+                <?php if ($current_admin['user_type'] === 'admin'): ?>
+                    <a href="admin_create_raffle.php" class="primary-btn">
+                        <i class="fas fa-plus"></i>
+                        Nueva Rifa
+                    </a>
+                <?php elseif ($current_admin['user_type'] === 'committee'): ?>
+                    <a href="add_seller.php" class="primary-btn">
+                        <i class="fas fa-user-plus"></i>
+                        Agregar Vendedor
+                    </a>
+                <?php elseif ($current_admin['user_type'] === 'seller'): ?>
+                    <a href="realizar_venta.php" class="success-btn">
+                        <i class="fas fa-shopping-cart"></i>
+                        Realizar Venta
+                    </a>
                 <?php endif; ?>
             </div>
 
