@@ -20,72 +20,150 @@ if (!$rifa_id) {
     exit();
 }
 
-// Datos de ejemplo para la rifa (en producción vendría de la base de datos)
-$rifa_info = [
-    'id' => $rifa_id,
-    'name' => 'iPhone 15 Pro Max',
-    'draw_date' => '2025-02-15',
-    'ticket_price' => 50.00,
-    'total_tickets' => 1000,
-    'sold_tickets' => 680
-];
+// Obtener información real de la rifa desde la base de datos
+$rifa_info = null;
+try {
+    $sql = "SELECT * FROM raffles WHERE id = ?";
+    $rifa_info = fetchOne($sql, [$rifa_id]);
+    
+    if (!$rifa_info) {
+        header('Location: panel.php');
+        exit();
+    }
+} catch (Exception $e) {
+    error_log("Error al obtener información de la rifa: " . $e->getMessage());
+    header('Location: panel.php');
+    exit();
+}
 
-// Datos de ejemplo para vendedores (en producción vendría de la base de datos)
-$sellers_data = [
-    [
-        'id' => 1,
-        'name' => 'Juan Pérez',
-        'email' => 'juan@email.com',
-        'phone' => '+52 662 123 4567',
-        'tickets_sold' => 85,
-        'commission_rate' => 10.00,
-        'total_sales' => 4250.00,
-        'commission_earned' => 425.00,
-        'status' => 'active',
-        'joined_date' => '2024-12-01'
-    ],
-    [
-        'id' => 2,
-        'name' => 'María García',
-        'email' => 'maria@email.com',
-        'phone' => '+52 662 987 6543',
-        'tickets_sold' => 120,
-        'commission_rate' => 12.00,
-        'total_sales' => 6000.00,
-        'commission_earned' => 720.00,
-        'status' => 'active',
-        'joined_date' => '2024-11-15'
-    ],
-    [
-        'id' => 3,
-        'name' => 'Carlos López',
-        'email' => 'carlos@email.com',
-        'phone' => '+52 662 456 7890',
-        'tickets_sold' => 45,
-        'commission_rate' => 8.00,
-        'total_sales' => 2250.00,
-        'commission_earned' => 180.00,
-        'status' => 'inactive',
-        'joined_date' => '2024-10-20'
-    ],
-    [
-        'id' => 4,
-        'name' => 'Ana Martínez',
-        'email' => 'ana@email.com',
-        'phone' => '+52 662 321 0987',
-        'tickets_sold' => 95,
-        'commission_rate' => 11.00,
-        'total_sales' => 4750.00,
-        'commission_earned' => 522.50,
-        'status' => 'active',
-        'joined_date' => '2024-12-10'
-    ]
-];
+// Obtener vendedores reales de la base de datos
+$sellers_data = [];
+$total_sellers = 0;
+$active_sellers = 0;
+$total_commission = 0;
+$total_sales_by_sellers = 0;
 
-$total_sellers = count($sellers_data);
-$active_sellers = count(array_filter($sellers_data, fn($s) => $s['status'] === 'active'));
-$total_commission = array_sum(array_column($sellers_data, 'commission_earned'));
-$total_sales_by_sellers = array_sum(array_column($sellers_data, 'total_sales'));
+try {
+    // Obtener vendedores que pertenecen a este comité
+    $sql = "SELECT 
+                a.id,
+                a.username,
+                a.full_name,
+                a.email,
+                a.phone,
+                a.status,
+                a.created_at,
+                COALESCE(seller_stats.tickets_sold, 0) as tickets_sold,
+                COALESCE(seller_stats.total_sales, 0) as total_sales,
+                COALESCE(seller_stats.commission_earned, 0) as commission_earned,
+                COALESCE(seller_stats.sales_count, 0) as sales_count
+            FROM admins a
+            LEFT JOIN (
+                SELECT 
+                    s.seller_id,
+                    COUNT(*) as sales_count,
+                    SUM(s.quantity) as tickets_sold,
+                    SUM(s.total_amount) as total_sales,
+                    SUM(s.commission_amount) as commission_earned
+                FROM sells s
+                WHERE s.raffle_id = ? AND s.status = 'completed'
+                GROUP BY s.seller_id
+            ) seller_stats ON a.id = seller_stats.seller_id
+            WHERE a.user_type = 'seller' 
+            AND a.committee_id = ?
+            ORDER BY seller_stats.tickets_sold DESC, a.full_name ASC";
+    
+    $sellers_data = fetchAll($sql, [$rifa_id, $current_admin['id']]);
+    
+    // Calcular estadísticas
+    $total_sellers = count($sellers_data);
+    $active_sellers = count(array_filter($sellers_data, fn($s) => $s['status'] === 'active'));
+    $total_commission = array_sum(array_column($sellers_data, 'commission_earned'));
+    $total_sales_by_sellers = array_sum(array_column($sellers_data, 'total_sales'));
+    
+    // Formatear fechas y calcular datos adicionales
+    foreach ($sellers_data as &$seller) {
+        $seller['joined_date'] = $seller['created_at'];
+        $seller['formatted_date'] = date('d/m/Y', strtotime($seller['created_at']));
+        
+        // Calcular tasa de comisión promedio si hay ventas
+        if ($seller['total_sales'] > 0 && $seller['commission_earned'] > 0) {
+            $seller['commission_rate'] = ($seller['commission_earned'] / $seller['total_sales']) * 100;
+        } else {
+            $seller['commission_rate'] = 0;
+        }
+        
+        // Datos para mostrar
+        $seller['name'] = $seller['full_name'] ?: $seller['username'];
+        $seller['phone'] = $seller['phone'] ?: 'No especificado';
+    }
+    
+} catch (Exception $e) {
+    error_log("Error al obtener vendedores: " . $e->getMessage());
+    $sellers_data = [];
+}
+
+// Procesar acciones (cambiar estado, etc.)
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
+    $action = $_POST['action'];
+    $seller_id = intval($_POST['seller_id'] ?? 0);
+    
+    try {
+        switch ($action) {
+            case 'toggle_status':
+                // Cambiar estado del vendedor
+                $current_status_query = "SELECT status FROM admins WHERE id = ? AND user_type = 'seller' AND committee_id = ?";
+                $current_status = fetchOne($current_status_query, [$seller_id, $current_admin['id']]);
+                
+                if ($current_status) {
+                    $new_status = $current_status['status'] === 'active' ? 'inactive' : 'active';
+                    $update_sql = "UPDATE admins SET status = ?, updated_at = NOW() WHERE id = ?";
+                    executeQuery($update_sql, [$new_status, $seller_id]);
+                    
+                    logAdminActivity('toggle_seller_status', "Cambió estado de vendedor ID: {$seller_id} a {$new_status}");
+                    
+                    // Actualizar en memoria para reflejar el cambio
+                    foreach ($sellers_data as &$seller) {
+                        if ($seller['id'] == $seller_id) {
+                            $seller['status'] = $new_status;
+                            break;
+                        }
+                    }
+                    
+                    if ($new_status === 'active') {
+                        $active_sellers++;
+                    } else {
+                        $active_sellers--;
+                    }
+                }
+                break;
+                
+            case 'delete_seller':
+                // Eliminar vendedor (solo si no tiene ventas)
+                $sales_check = fetchOne("SELECT COUNT(*) as count FROM sells WHERE seller_id = ?", [$seller_id]);
+                
+                if ($sales_check['count'] == 0) {
+                    $delete_sql = "DELETE FROM admins WHERE id = ? AND user_type = 'seller' AND committee_id = ?";
+                    executeQuery($delete_sql, [$seller_id, $current_admin['id']]);
+                    
+                    logAdminActivity('delete_seller', "Eliminó vendedor ID: {$seller_id}");
+                    
+                    // Remover de la lista en memoria
+                    $sellers_data = array_filter($sellers_data, fn($s) => $s['id'] != $seller_id);
+                    $total_sellers--;
+                } else {
+                    throw new Exception("No se puede eliminar el vendedor porque tiene ventas registradas");
+                }
+                break;
+        }
+        
+        $success_message = "Acción realizada correctamente";
+        
+    } catch (Exception $e) {
+        $error_message = $e->getMessage();
+        error_log("Error en acción de vendedor: " . $e->getMessage());
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -327,6 +405,35 @@ $total_sales_by_sellers = array_sum(array_column($sellers_data, 'total_sales'));
             color: #059669;
         }
 
+        /* Alerts */
+        .alert {
+            padding: 1rem;
+            border-radius: 12px;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+        }
+
+        .alert-success {
+            background: #f0fdf4;
+            color: #166534;
+            border: 1px solid #bbf7d0;
+        }
+
+        .alert-error {
+            background: #fef2f2;
+            color: #991b1b;
+            border: 1px solid #fecaca;
+        }
+
+        .alert-icon {
+            width: 20px;
+            height: 20px;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
         /* Content Section */
         .content-section {
             background: white;
@@ -421,6 +528,17 @@ $total_sales_by_sellers = array_sum(array_column($sellers_data, 'total_sales'));
             line-height: 1.4;
         }
 
+        .seller-username {
+            font-size: 0.8rem;
+            color: #8b5cf6;
+            font-weight: 500;
+            background: #f3f4f6;
+            padding: 0.2rem 0.5rem;
+            border-radius: 6px;
+            display: inline-block;
+            margin-top: 0.25rem;
+        }
+
         .performance-cell {
             text-align: center;
         }
@@ -479,6 +597,11 @@ $total_sales_by_sellers = array_sum(array_column($sellers_data, 'total_sales'));
             color: #991b1b;
         }
 
+        .status-suspended {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
         /* Action Buttons */
         .action-buttons {
             display: flex;
@@ -525,9 +648,16 @@ $total_sales_by_sellers = array_sum(array_column($sellers_data, 'total_sales'));
             border-color: #f59e0b;
         }
 
+        .action-btn.danger {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            color: white;
+            border-color: #ef4444;
+        }
+
         .action-btn.primary:hover,
         .action-btn.success:hover,
-        .action-btn.warning:hover {
+        .action-btn.warning:hover,
+        .action-btn.danger:hover {
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
         }
 
@@ -549,6 +679,13 @@ $total_sales_by_sellers = array_sum(array_column($sellers_data, 'total_sales'));
             font-weight: 600;
             color: #374151;
             margin-bottom: 0.5rem;
+        }
+
+        /* No sales indicator */
+        .no-sales {
+            color: #9ca3af;
+            font-style: italic;
+            font-size: 0.85rem;
         }
 
         /* Responsive */
@@ -632,6 +769,21 @@ $total_sales_by_sellers = array_sum(array_column($sellers_data, 'total_sales'));
 
     <!-- Main Container -->
     <main class="main-container">
+        <!-- Alerts -->
+        <?php if (isset($success_message)): ?>
+            <div class="alert alert-success">
+                <i class="fas fa-check-circle alert-icon"></i>
+                <span><?php echo htmlspecialchars($success_message); ?></span>
+            </div>
+        <?php endif; ?>
+
+        <?php if (isset($error_message)): ?>
+            <div class="alert alert-error">
+                <i class="fas fa-exclamation-triangle alert-icon"></i>
+                <span><?php echo htmlspecialchars($error_message); ?></span>
+            </div>
+        <?php endif; ?>
+
         <!-- Estadísticas -->
         <div class="stats-grid">
             <div class="stat-card stat-sellers">
@@ -644,7 +796,7 @@ $total_sales_by_sellers = array_sum(array_column($sellers_data, 'total_sales'));
                 <div class="stat-number"><?php echo number_format($total_sellers); ?></div>
                 <div class="stat-change">
                     <i class="fas fa-arrow-up"></i>
-                    Registrados
+                    Registrados en tu equipo
                 </div>
             </div>
 
@@ -667,12 +819,12 @@ $total_sales_by_sellers = array_sum(array_column($sellers_data, 'total_sales'));
                     <div class="stat-icon">
                         <i class="fas fa-percentage"></i>
                     </div>
-                    <div class="stat-title">Comisiones Totales</div>
+                    <div class="stat-title">Comisiones Pagadas</div>
                 </div>
                 <div class="stat-number">$<?php echo number_format($total_commission, 2); ?></div>
                 <div class="stat-change">
                     <i class="fas fa-arrow-up"></i>
-                    Pagadas a vendedores
+                    Total para esta rifa
                 </div>
             </div>
 
@@ -698,21 +850,21 @@ $total_sales_by_sellers = array_sum(array_column($sellers_data, 'total_sales'));
                     <i class="fas fa-list"></i>
                     Lista de Vendedores
                 </h2>
-                <button class="btn btn-primary" onclick="addSeller()">
+                <a href="add_seller.php" class="btn btn-primary">
                     <i class="fas fa-plus"></i>
                     Agregar Vendedor
-                </button>
+                </a>
             </div>
 
             <?php if (empty($sellers_data)): ?>
                 <div class="empty-state">
                     <i class="fas fa-users"></i>
                     <h3>No hay vendedores registrados</h3>
-                    <p>Comienza agregando tu primer vendedor</p>
-                    <button class="btn btn-primary" onclick="addSeller()" style="margin-top: 1rem;">
+                    <p>Comienza agregando tu primer vendedor para esta rifa</p>
+                    <a href="add_seller.php" class="btn btn-primary" style="margin-top: 1rem;">
                         <i class="fas fa-plus"></i>
                         Agregar Primer Vendedor
-                    </button>
+                    </a>
                 </div>
             <?php else: ?>
                 <table class="modern-table">
@@ -740,49 +892,92 @@ $total_sales_by_sellers = array_sum(array_column($sellers_data, 'total_sales'));
                                                 <?php echo htmlspecialchars($seller['email']); ?><br>
                                                 <?php echo htmlspecialchars($seller['phone']); ?>
                                             </div>
+                                            <div class="seller-username">@<?php echo htmlspecialchars($seller['username']); ?></div>
                                         </div>
                                     </div>
                                 </td>
                                 <td class="performance-cell">
-                                    <div class="performance-number"><?php echo number_format($seller['tickets_sold']); ?></div>
-                                    <div class="performance-label">boletos vendidos</div>
-                                    <div style="margin-top: 0.5rem;">
-                                        <div class="performance-number">$<?php echo number_format($seller['total_sales'], 2); ?></div>
-                                        <div class="performance-label">ventas totales</div>
-                                    </div>
+                                    <?php if ($seller['tickets_sold'] > 0): ?>
+                                        <div class="performance-number"><?php echo number_format($seller['tickets_sold']); ?></div>
+                                        <div class="performance-label">boletos vendidos</div>
+                                        <div style="margin-top: 0.5rem;">
+                                            <div class="performance-number">$<?php echo number_format($seller['total_sales'], 2); ?></div>
+                                            <div class="performance-label">ventas totales</div>
+                                        </div>
+                                        <div style="margin-top: 0.5rem;">
+                                            <div class="performance-number"><?php echo number_format($seller['sales_count']); ?></div>
+                                            <div class="performance-label">transacciones</div>
+                                        </div>
+                                    <?php else: ?>
+                                        <div class="no-sales">
+                                            <i class="fas fa-info-circle"></i><br>
+                                            Sin ventas aún
+                                        </div>
+                                    <?php endif; ?>
                                 </td>
                                 <td class="commission-info">
-                                    <div class="commission-rate"><?php echo $seller['commission_rate']; ?>%</div>
-                                    <div class="commission-earned">$<?php echo number_format($seller['commission_earned'], 2); ?></div>
+                                    <?php if ($seller['commission_earned'] > 0): ?>
+                                        <div class="commission-rate"><?php echo number_format($seller['commission_rate'], 1); ?>%</div>
+                                        <div class="commission-earned">$<?php echo number_format($seller['commission_earned'], 2); ?></div>
+                                    <?php else: ?>
+                                        <div class="no-sales">Sin comisiones</div>
+                                    <?php endif; ?>
                                 </td>
                                 <td>
                                     <div class="status-badge status-<?php echo $seller['status']; ?>">
-                                        <i class="fas fa-<?php echo $seller['status'] === 'active' ? 'check-circle' : 'times-circle'; ?>"></i>
-                                        <?php echo ucfirst($seller['status']); ?>
+                                        <i class="fas fa-<?php echo $seller['status'] === 'active' ? 'check-circle' : ($seller['status'] === 'suspended' ? 'pause-circle' : 'times-circle'); ?>"></i>
+                                        <?php 
+                                            $status_labels = [
+                                                'active' => 'Activo',
+                                                'inactive' => 'Inactivo',
+                                                'suspended' => 'Suspendido'
+                                            ];
+                                            echo $status_labels[$seller['status']] ?? ucfirst($seller['status']);
+                                        ?>
                                     </div>
                                 </td>
                                 <td>
-                                    <?php echo date('d/m/Y', strtotime($seller['joined_date'])); ?>
+                                    <?php echo $seller['formatted_date']; ?>
                                 </td>
                                 <td>
                                     <div class="action-buttons">
-                                        <button class="action-btn primary" title="Ver Detalles" onclick="viewSeller(<?php echo $seller['id']; ?>)">
+                                        <button class="action-btn primary" 
+                                                title="Ver Ventas" 
+                                                onclick="viewSellerSales(<?php echo $seller['id']; ?>, '<?php echo htmlspecialchars($seller['name'], ENT_QUOTES); ?>')">
                                             <i class="fas fa-eye"></i>
                                         </button>
                                         
-                                        <button class="action-btn success" title="Editar" onclick="editSeller(<?php echo $seller['id']; ?>)">
+                                        <button class="action-btn success" 
+                                                title="Editar Información" 
+                                                onclick="editSeller(<?php echo $seller['id']; ?>, '<?php echo htmlspecialchars($seller['name'], ENT_QUOTES); ?>')">
                                             <i class="fas fa-edit"></i>
                                         </button>
                                         
-                                        <button class="action-btn warning" 
-                                                title="<?php echo $seller['status'] === 'active' ? 'Desactivar' : 'Activar'; ?>" 
-                                                onclick="toggleSellerStatus(<?php echo $seller['id']; ?>, '<?php echo $seller['status']; ?>')">
-                                            <?php if ($seller['status'] === 'active'): ?>
-                                                <i class="fas fa-user-slash"></i>
-                                            <?php else: ?>
-                                                <i class="fas fa-user-check"></i>
-                                            <?php endif; ?>
-                                        </button>
+                                        <form method="POST" style="display: inline;" onsubmit="return confirmToggleStatus('<?php echo $seller['status']; ?>', '<?php echo htmlspecialchars($seller['name'], ENT_QUOTES); ?>')">
+                                            <input type="hidden" name="action" value="toggle_status">
+                                            <input type="hidden" name="seller_id" value="<?php echo $seller['id']; ?>">
+                                            <button type="submit" 
+                                                    class="action-btn warning" 
+                                                    title="<?php echo $seller['status'] === 'active' ? 'Desactivar' : 'Activar'; ?>">
+                                                <?php if ($seller['status'] === 'active'): ?>
+                                                    <i class="fas fa-user-slash"></i>
+                                                <?php else: ?>
+                                                    <i class="fas fa-user-check"></i>
+                                                <?php endif; ?>
+                                            </button>
+                                        </form>
+
+                                        <?php if ($seller['tickets_sold'] == 0): ?>
+                                        <form method="POST" style="display: inline;" onsubmit="return confirmDelete('<?php echo htmlspecialchars($seller['name'], ENT_QUOTES); ?>')">
+                                            <input type="hidden" name="action" value="delete_seller">
+                                            <input type="hidden" name="seller_id" value="<?php echo $seller['id']; ?>">
+                                            <button type="submit" 
+                                                    class="action-btn danger" 
+                                                    title="Eliminar Vendedor">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </form>
+                                        <?php endif; ?>
                                     </div>
                                 </td>
                             </tr>
@@ -795,30 +990,25 @@ $total_sales_by_sellers = array_sum(array_column($sellers_data, 'total_sales'));
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
     <script>
-        function addSeller() {
-            alert('Función para agregar nuevo vendedor - Por implementar');
-            // Aquí irías a un modal o página para agregar vendedor
+        function viewSellerSales(sellerId, sellerName) {
+            // Redirigir a página de ventas del vendedor
+            window.location.href = `seller_sales.php?seller_id=${sellerId}&rifa_id=<?php echo $rifa_id; ?>`;
         }
         
-        function viewSeller(sellerId) {
-            alert(`Ver detalles del vendedor ID: ${sellerId}`);
-            // Aquí mostrarías un modal con detalles del vendedor
+        function editSeller(sellerId, sellerName) {
+            // Redirigir a página de edición de vendedor
+            window.location.href = `edit_seller.php?seller_id=${sellerId}`;
         }
         
-        function editSeller(sellerId) {
-            alert(`Editar vendedor ID: ${sellerId}`);
-            // Aquí irías a un modal o página para editar vendedor
-        }
-        
-        function toggleSellerStatus(sellerId, currentStatus) {
-            const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
-            const action = newStatus === 'active' ? 'activar' : 'desactivar';
+        function confirmToggleStatus(currentStatus, sellerName) {
+            const newStatus = currentStatus === 'active' ? 'inactivo' : 'activo';
+            const action = currentStatus === 'active' ? 'desactivar' : 'activar';
             
-            if (confirm(`¿Estás seguro de que quieres ${action} a este vendedor?`)) {
-                // Aquí harías la petición AJAX para cambiar el estado
-                alert(`Vendedor ${sellerId} ${action === 'activar' ? 'activado' : 'desactivado'} correctamente`);
-                location.reload(); // En producción, actualizarías solo la fila
-            }
+            return confirm(`¿Estás seguro de que quieres ${action} a ${sellerName}?\n\nEsto cambiará su estado a: ${newStatus}`);
+        }
+
+        function confirmDelete(sellerName) {
+            return confirm(`¿Estás seguro de que quieres eliminar a ${sellerName}?\n\n⚠️ Esta acción NO se puede deshacer.\n\nSolo se pueden eliminar vendedores que no tengan ventas registradas.`);
         }
 
         // Animaciones de entrada
@@ -834,7 +1024,30 @@ $total_sales_by_sellers = array_sum(array_column($sellers_data, 'total_sales'));
                     card.style.transform = 'translateY(0)';
                 }, index * 100);
             });
+
+            // Animar las filas de la tabla
+            const rows = document.querySelectorAll('.modern-table tbody tr');
+            rows.forEach((row, index) => {
+                row.style.opacity = '0';
+                row.style.transform = 'translateX(-10px)';
+                
+                setTimeout(() => {
+                    row.style.transition = 'all 0.4s ease';
+                    row.style.opacity = '1';
+                    row.style.transform = 'translateX(0)';
+                }, 400 + (index * 50));
+            });
         });
+
+        // Función para refrescar estadísticas (opcional)
+        function refreshStats() {
+            // Aquí podrías hacer una petición AJAX para actualizar las estadísticas
+            // sin recargar toda la página
+            location.reload();
+        }
+
+        // Auto-refresh cada 5 minutos (opcional)
+        // setInterval(refreshStats, 300000);
     </script>
 </body>
 </html>
