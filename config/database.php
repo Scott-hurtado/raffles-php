@@ -1,17 +1,15 @@
 <?php
 /**
  * Database Configuration
- * Configuración para Railway y desarrollo local
+ * Configuración para Hostinger
  */
 
-// Configuración para Railway (variables de entorno)
-$host = $_ENV['MYSQL_HOST'] ?? $_SERVER['MYSQL_HOST'] ?? 'localhost';
-$port = $_ENV['MYSQL_PORT'] ?? $_SERVER['MYSQL_PORT'] ?? '3306';
-$dbname = $_ENV['MYSQL_DATABASE'] ?? $_SERVER['MYSQL_DATABASE'] ?? 'raffles';
-$username = $_ENV['MYSQL_USER'] ?? $_SERVER['MYSQL_USER'] ?? 'root';
-
-// MAMP usa 'root' como contraseña por defecto
-$password = $_ENV['MYSQL_PASSWORD'] ?? $_SERVER['MYSQL_PASSWORD'] ?? 'root';
+// Configuración para Hostinger
+$host = 'localhost';
+$port = '3306';
+$dbname = 'raffles';
+$username = 'root';
+$password = 'root';
 
 // Configuración de DSN
 $dsn = "mysql:host={$host};port={$port};dbname={$dbname};charset=utf8mb4";
@@ -29,11 +27,7 @@ try {
     // Conexión exitosa - mensaje removido para producción
 } catch (PDOException $e) {
     // En producción, no mostrar detalles del error
-    if ($_ENV['ENVIRONMENT'] === 'production' || $_SERVER['ENVIRONMENT'] === 'production') {
-        die('Error de conexión a la base de datos');
-    } else {
-        die('Error de conexión: ' . $e->getMessage());
-    }
+    die('Error de conexión a la base de datos');
 }
 
 /**
